@@ -253,12 +253,15 @@ export const PedidoProvider = ({ children }) => {
           estado: 'activo',
         };
 
-        const precioFinal = precioPersonalizado !== null ? precioPersonalizado : producto.precioBase;
+        const precioFinal = precioPersonalizado !== null ? Number(precioPersonalizado) : Number(producto.precioBase);
         const varianteStr = variante || '';
 
-        // Buscar si ya existe el mismo producto con la misma variante
+        // Buscar si ya existe el mismo producto con la misma variante y MISMO precio unitario
         const indexExistente = pedido.productos.findIndex(
-          (item) => item.productoId === producto.id && item.variante === varianteStr
+          (item) => 
+            item.productoId === producto.id && 
+            item.variante === varianteStr && 
+            Number(item.precioUnitario) === Number(precioFinal)
         );
 
         let nuevosProductos = [...pedido.productos];
@@ -273,7 +276,7 @@ export const PedidoProvider = ({ children }) => {
           nuevosProductos.push({
             productoId: producto.id,
             nombre: producto.nombre,
-            categoria: producto.categoria,
+            categoria: producto.categoria || 'general',
             precioUnitario: precioFinal,
             cantidad: 1,
             variante: varianteStr,
@@ -295,7 +298,7 @@ export const PedidoProvider = ({ children }) => {
       })
     );
 
-    mostrarNotificacion(`Agregado: ${producto.nombre} ${variante ? `(${variante})` : ''}`, 'success');
+    mostrarNotificacion(`Agregado: ${producto.nombre} ${variante ? `(${variante})` : ''} - $${(precioPersonalizado !== null ? Number(precioPersonalizado) : Number(producto.precioBase)).toFixed(2)}`, 'success');
   };
 
   // Cambiar cantidad de un producto
@@ -379,6 +382,37 @@ export const PedidoProvider = ({ children }) => {
           pedidoActual: {
             ...m.pedidoActual,
             productos: nuevosProductos,
+          },
+        };
+      })
+    );
+  };
+
+  // Actualizar precio de un ítem individual
+  const actualizarPrecioItem = (itemIndex, nuevoPrecio) => {
+    if (!mesaSeleccionada) return;
+
+    setMesas((prev) =>
+      prev.map((m) => {
+        if (m.numero !== mesaSeleccionada || !m.pedidoActual) return m;
+
+        const nuevosProductos = [...m.pedidoActual.productos];
+        if (nuevosProductos[itemIndex]) {
+          const precioNum = Math.max(0, parseFloat(nuevoPrecio) || 0);
+          nuevosProductos[itemIndex] = {
+            ...nuevosProductos[itemIndex],
+            precioUnitario: precioNum,
+          };
+        }
+
+        const totalActualizado = calcularTotal(nuevosProductos);
+
+        return {
+          ...m,
+          pedidoActual: {
+            ...m.pedidoActual,
+            productos: nuevosProductos,
+            total: totalActualizado,
           },
         };
       })
@@ -651,6 +685,7 @@ export const PedidoProvider = ({ children }) => {
         cambiarCantidad,
         eliminarProducto,
         actualizarNotasItem,
+        actualizarPrecioItem,
         actualizarNotasPedido,
         cancelarPedidoMesa,
         confirmarCobro,

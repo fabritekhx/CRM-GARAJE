@@ -7,10 +7,11 @@ import {
   UtensilsCrossed, 
   Plus, 
   Check, 
-  Sparkles,
   X,
   Layers,
-  Citrus
+  Citrus,
+  DollarSign,
+  Edit3
 } from 'lucide-react';
 import { CATEGORIAS, MENU } from '../data/menu';
 import { usePedidos } from '../context/PedidoContext';
@@ -22,11 +23,15 @@ export default function MenuPanel() {
   const [categoriaActiva, setCategoriaActiva] = useState('pescados');
   const [busqueda, setBusqueda] = useState('');
   
-  // Estado para el modal de selección de variante (Sabor o Tamaño de Pescado)
+  // Estado para el modal de selección de producto / variantes / otro valor
   const [productoParaVariante, setProductoParaVariante] = useState(null);
   const [varianteSeleccionada, setVarianteSeleccionada] = useState('');
   const [precioSeleccionado, setPrecioSeleccionado] = useState(null);
   const [notasVariante, setNotasVariante] = useState('');
+  
+  // Estado para modo "Otro valor / Precio personalizado"
+  const [esOtroValor, setEsOtroValor] = useState(false);
+  const [valorPersonalizadoInput, setValorPersonalizadoInput] = useState('');
 
   // Filtrado de productos por categoría y búsqueda
   const productosFiltrados = useMemo(() => {
@@ -43,43 +48,55 @@ export default function MenuPanel() {
     });
   }, [categoriaActiva, busqueda]);
 
-  // Al hacer clic en un producto
+  // Al hacer clic en un producto para ordenar
   const handleSeleccionarProducto = (prod) => {
     if (!mesaSeleccionada) return;
 
+    setProductoParaVariante(prod);
+    setNotasVariante('');
+    setEsOtroValor(false);
+
     if (prod.tipoVariante === 'tamano_pescado') {
-      // Abrir modal para elegir tamaño: pequeño (4), mediano (5), grande (6)
-      setProductoParaVariante(prod);
-      setVarianteSeleccionada(prod.tamanos[1].nombre); // Default mediano
+      // Default Mediano ($5.00)
+      setVarianteSeleccionada(prod.tamanos[1].nombre);
       setPrecioSeleccionado(prod.tamanos[1].precio);
-      setNotasVariante('');
-    } else if (prod.tipoVariante === 'sabor' && prod.sabores.length > 0) {
-      if (prod.sabores.length === 1) {
-        // Solo un sabor definido (ej. Coca Cola Familiar o Fuisti familiar)
-        agregarProductoAPedido(prod, prod.sabores[0], prod.precioBase);
-      } else {
-        // Múltiples sabores disponibles (ej. Coca Cola, Sprite, Fanta, Fiora, Mora)
-        setProductoParaVariante(prod);
-        setVarianteSeleccionada(prod.sabores[0]);
-        setPrecioSeleccionado(prod.precioBase);
-        setNotasVariante('');
-      }
+      setValorPersonalizadoInput(prod.tamanos[1].precio.toString());
+    } else if (prod.tipoVariante === 'sabor' && prod.sabores?.length > 0) {
+      setVarianteSeleccionada(prod.sabores[0]);
+      setPrecioSeleccionado(prod.precioBase);
+      setValorPersonalizadoInput(prod.precioBase.toString());
     } else {
-      // Producto sin variante (ej. Cerveza Pilsener, Porciones Extras, Agua Cielo)
-      agregarProductoAPedido(prod, null, prod.precioBase);
+      setVarianteSeleccionada('');
+      setPrecioSeleccionado(prod.precioBase);
+      setValorPersonalizadoInput(prod.precioBase.toString());
     }
   };
 
-  // Confirmar la variante seleccionada
+  // Confirmar la variante / producto con el valor final
   const handleConfirmarVariante = () => {
     if (!productoParaVariante) return;
+    
+    let precioFinal = precioSeleccionado;
+    let varianteFinal = varianteSeleccionada;
+
+    if (esOtroValor) {
+      const precioNumerico = parseFloat(valorPersonalizadoInput);
+      precioFinal = !isNaN(precioNumerico) && precioNumerico >= 0 ? precioNumerico : (precioSeleccionado || 0);
+      if (!varianteFinal || varianteFinal === 'Otro valor' || varianteFinal === 'Personalizado') {
+        varianteFinal = `Personalizado $${precioFinal.toFixed(2)}`;
+      }
+    }
+
     agregarProductoAPedido(
       productoParaVariante,
-      varianteSeleccionada,
-      precioSeleccionado,
+      varianteFinal,
+      precioFinal,
       notasVariante
     );
+
     setProductoParaVariante(null);
+    setEsOtroValor(false);
+    setValorPersonalizadoInput('');
   };
 
   const getCategoriaIcon = (id) => {
@@ -96,8 +113,8 @@ export default function MenuPanel() {
   return (
     <div className="flex flex-col h-full bg-slate-900/50 rounded-2xl border border-slate-800 overflow-hidden">
       
-      {/* Barra superior de categorías y búsqueda */}
-      <div className="p-4 border-b border-slate-800 bg-slate-900/80 space-y-3">
+      {/* Barra superior: Buscador y Categorías */}
+      <div className="p-3.5 sm:p-4 border-b border-slate-800 bg-slate-900/80 space-y-3">
         
         {/* Buscador Rápido */}
         <div className="relative">
@@ -106,13 +123,13 @@ export default function MenuPanel() {
             type="text"
             value={busqueda}
             onChange={(e) => setBusqueda(e.target.value)}
-            placeholder="Buscar en el menú (ej. Tilapia, Coca Cola, Patacones)..."
-            className="w-full pl-10 pr-4 py-2.5 bg-slate-800/80 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-400 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-all"
+            placeholder="Buscar en el menú (ej. Tilapia, Jugo, Coca Cola)..."
+            className="w-full pl-10 pr-8 py-2 bg-slate-800/80 border border-slate-700 rounded-xl text-xs sm:text-sm text-white placeholder-slate-400 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-all"
           />
           {busqueda && (
             <button
               onClick={() => setBusqueda('')}
-              className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-white"
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-white"
             >
               <X className="w-3.5 h-3.5" />
             </button>
@@ -130,7 +147,7 @@ export default function MenuPanel() {
                   setCategoriaActiva(cat.id);
                   setBusqueda('');
                 }}
-                className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap shrink-0 border ${
+                className={`flex items-center gap-2 px-3.5 py-1.5 sm:py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap shrink-0 border ${
                   esActiva
                     ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-md shadow-amber-500/20'
                     : 'bg-slate-800/60 text-slate-300 border-slate-700 hover:bg-slate-800 hover:text-white'
@@ -144,49 +161,54 @@ export default function MenuPanel() {
         </div>
       </div>
 
-      {/* Grid de Productos */}
-      <div className="flex-1 p-4 overflow-y-auto min-h-[300px]">
+      {/* Grid de Productos - Diseño limpio original */}
+      <div className="flex-1 p-3.5 sm:p-4 overflow-y-auto min-h-[300px]">
         {productosFiltrados.length > 0 ? (
           <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {productosFiltrados.map((prod) => {
               const tieneVariante = prod.tipoVariante !== null;
               
               return (
-                <button
+                <div
                   key={prod.id}
                   onClick={() => handleSeleccionarProducto(prod)}
-                  className="group relative flex flex-col justify-between text-left p-3.5 rounded-xl bg-slate-800/70 border border-slate-700/80 hover:border-amber-500/60 hover:bg-slate-800 transition-all shadow-sm hover:shadow-md hover:-translate-y-0.5 active:translate-y-0"
+                  className="group relative flex flex-col justify-between p-3 sm:p-3.5 rounded-xl bg-slate-800/70 border border-slate-700/80 hover:border-amber-500/50 hover:bg-slate-800/90 transition-all shadow-sm cursor-pointer select-none"
                 >
                   <div>
-                    <div className="flex items-start justify-between gap-2 mb-1.5">
-                      <span className="font-bold text-sm text-white group-hover:text-amber-400 transition-colors line-clamp-1">
+                    <div className="flex items-start justify-between gap-1.5 mb-1">
+                      <span className="font-bold text-xs sm:text-sm text-white group-hover:text-amber-400 transition-colors line-clamp-1">
                         {prod.nombre}
                       </span>
                     </div>
 
-                    <p className="text-[11px] text-slate-400 line-clamp-2 mb-3">
+                    <p className="text-[10px] sm:text-[11px] text-slate-400 line-clamp-2 mb-2">
                       {prod.descripcion}
                     </p>
                   </div>
 
-                  <div className="flex items-center justify-between pt-2 border-t border-slate-700/50 mt-auto">
+                  {/* Precios y Botón Limpio */}
+                  <div className="pt-2 border-t border-slate-700/50 mt-auto flex items-center justify-between">
                     <div>
                       {prod.tipoVariante === 'tamano_pescado' ? (
                         <span className="text-xs font-extrabold text-amber-400 font-mono">
                           $4.00 - $6.00
                         </span>
                       ) : (
-                        <span className="text-sm font-extrabold text-amber-400 font-mono">
+                        <span className="text-xs sm:text-sm font-extrabold text-amber-400 font-mono">
                           {formatearDinero(prod.precioBase)}
                         </span>
                       )}
                     </div>
 
-                    <div className="w-7 h-7 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-400 group-hover:bg-amber-500 group-hover:text-slate-950 flex items-center justify-center transition-all">
-                      <Plus className="w-4 h-4" />
-                    </div>
+                    <button
+                      type="button"
+                      className="px-2.5 py-1 rounded-lg bg-amber-500/15 group-hover:bg-amber-500 text-amber-400 group-hover:text-slate-950 border border-amber-500/30 text-xs font-bold flex items-center gap-1 transition-all"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>{tieneVariante ? 'Elegir' : 'Agregar'}</span>
+                    </button>
                   </div>
-                </button>
+                </div>
               );
             })}
           </div>
@@ -199,70 +221,97 @@ export default function MenuPanel() {
         )}
       </div>
 
-      {/* MODAL DE SELECCIÓN DE VARIANTE (Tamaño de pescado o Sabores) */}
+      {/* MODAL DE SELECCIÓN DE PRODUCTO: TAMAÑOS / SABORES / OTRO VALOR */}
       {productoParaVariante && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="w-full max-w-md bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl p-5 space-y-4">
+        <div className="fixed inset-0 z-60 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="w-full max-w-md bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl p-5 space-y-4 max-h-[90vh] overflow-y-auto">
             
-            {/* Header del Modal */}
+            {/* Encabezado del Modal */}
             <div className="flex items-start justify-between border-b border-slate-800 pb-3">
               <div>
-                <span className="text-xs uppercase font-bold tracking-wider text-amber-400">
-                  {productoParaVariante.categoria === 'pescados' ? 'Seleccionar Tamaño' : 'Seleccionar Sabor'}
+                <span className="text-[11px] uppercase font-bold tracking-wider text-amber-400">
+                  {productoParaVariante.categoria === 'pescados' ? 'Seleccionar Tamaño o Valor' : 'Personalizar Producto'}
                 </span>
-                <h3 className="text-lg font-bold text-white">
+                <h3 className="text-base sm:text-lg font-bold text-white">
                   {productoParaVariante.nombre}
                 </h3>
               </div>
               <button
-                onClick={() => setProductoParaVariante(null)}
-                className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800"
+                onClick={() => {
+                  setProductoParaVariante(null);
+                  setEsOtroValor(false);
+                }}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            {/* Opciones de Pescado (Tamaño: Pequeño $4, Mediano $5, Grande $6) */}
+            {/* CASO 1: PESCADOS (TAMAÑOS ESTÁNDAR + BOTÓN OTRO VALOR INTEGRADO) */}
             {productoParaVariante.tipoVariante === 'tamano_pescado' && (
-              <div className="space-y-2">
+              <div className="space-y-2.5">
                 <label className="text-xs font-semibold text-slate-300">
-                  Tamaño de pescado preparado:
+                  Elige el tamaño o valor del pescado:
                 </label>
-                <div className="grid grid-cols-3 gap-2.5">
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                   {productoParaVariante.tamanos.map((tam) => {
-                    const seleccionado = precioSeleccionado === tam.precio && varianteSeleccionada === tam.nombre;
+                    const seleccionado = !esOtroValor && precioSeleccionado === tam.precio && varianteSeleccionada === tam.nombre;
                     return (
                       <button
                         key={tam.id}
                         type="button"
                         onClick={() => {
+                          setEsOtroValor(false);
                           setVarianteSeleccionada(tam.nombre);
                           setPrecioSeleccionado(tam.precio);
                         }}
-                        className={`p-3 rounded-xl border flex flex-col items-center justify-center transition-all ${
+                        className={`p-2.5 rounded-xl border flex flex-col items-center justify-center transition-all ${
                           seleccionado
                             ? 'bg-amber-500 text-slate-950 border-amber-400 font-bold shadow-md shadow-amber-500/20'
                             : 'bg-slate-800 text-slate-300 border-slate-700 hover:border-slate-600'
                         }`}
                       >
-                        <span className="text-sm">{tam.nombre}</span>
-                        <span className="text-base font-extrabold font-mono mt-1">
+                        <span className="text-xs">{tam.nombre}</span>
+                        <span className="text-sm font-extrabold font-mono mt-0.5">
                           {formatearDinero(tam.precio)}
                         </span>
                       </button>
                     );
                   })}
+
+                  {/* Botón "Otro valor" integrado dentro de la selección de tamaños */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEsOtroValor(true);
+                      setVarianteSeleccionada('Otro valor');
+                      if (!valorPersonalizadoInput) {
+                        setValorPersonalizadoInput('5.00');
+                      }
+                    }}
+                    className={`p-2.5 rounded-xl border flex flex-col items-center justify-center transition-all ${
+                      esOtroValor
+                        ? 'bg-amber-500 text-slate-950 border-amber-400 font-bold shadow-md shadow-amber-500/20'
+                        : 'bg-slate-800/80 text-amber-400 border-amber-500/40 hover:bg-slate-800 hover:border-amber-500'
+                    }`}
+                  >
+                    <span className="text-xs">Otro valor</span>
+                    <span className="text-sm font-extrabold font-mono mt-0.5">
+                      {esOtroValor && valorPersonalizadoInput ? `$${parseFloat(valorPersonalizadoInput || 0).toFixed(2)}` : '$$$'}
+                    </span>
+                  </button>
                 </div>
               </div>
             )}
 
-            {/* Opciones de Sabor para Gaseosas */}
-            {productoParaVariante.tipoVariante === 'sabor' && (
+            {/* CASO 2: SABORES PARA JUGOS Y GASEOSAS */}
+            {productoParaVariante.tipoVariante === 'sabor' && productoParaVariante.sabores?.length > 0 && (
               <div className="space-y-2">
                 <label className="text-xs font-semibold text-slate-300">
-                  Elige el sabor deseado:
+                  Elige el sabor:
                 </label>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-2 gap-2 max-h-36 overflow-y-auto pr-1">
                   {productoParaVariante.sabores.map((sabor) => {
                     const seleccionado = varianteSeleccionada === sabor;
                     return (
@@ -270,14 +319,14 @@ export default function MenuPanel() {
                         key={sabor}
                         type="button"
                         onClick={() => setVarianteSeleccionada(sabor)}
-                        className={`p-2.5 rounded-xl border text-left text-xs font-semibold flex items-center justify-between transition-all ${
+                        className={`p-2 rounded-xl border text-left text-xs font-semibold flex items-center justify-between transition-all ${
                           seleccionado
                             ? 'bg-amber-500 text-slate-950 border-amber-400 font-bold'
                             : 'bg-slate-800 text-slate-300 border-slate-700 hover:border-slate-600'
                         }`}
                       >
-                        <span>{sabor}</span>
-                        {seleccionado && <Check className="w-4 h-4" />}
+                        <span className="truncate">{sabor}</span>
+                        {seleccionado && <Check className="w-3.5 h-3.5 shrink-0" />}
                       </button>
                     );
                   })}
@@ -285,25 +334,99 @@ export default function MenuPanel() {
               </div>
             )}
 
-            {/* Notas opcionales de preparación */}
+            {/* OPCIÓN "OTRO VALOR" (Disponible en todos los productos al entrar) */}
+            {productoParaVariante.tipoVariante !== 'tamano_pescado' && (
+              <div className="pt-2 border-t border-slate-800 flex items-center justify-between">
+                <div className="text-xs text-slate-300 font-medium">
+                  Precio base: <span className="font-bold text-amber-400 font-mono">{formatearDinero(productoParaVariante.precioBase)}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const nuevo = !esOtroValor;
+                    setEsOtroValor(nuevo);
+                    if (nuevo && !valorPersonalizadoInput) {
+                      setValorPersonalizadoInput(productoParaVariante.precioBase.toString());
+                    }
+                  }}
+                  className={`py-1 px-2.5 rounded-lg text-xs font-bold transition-all border flex items-center gap-1.5 ${
+                    esOtroValor
+                      ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-md shadow-amber-500/20'
+                      : 'bg-slate-800 text-amber-400 border-amber-500/30 hover:bg-slate-700'
+                  }`}
+                >
+                  <DollarSign className="w-3.5 h-3.5" />
+                  <span>{esOtroValor ? 'Otro valor activo' : 'Agregar otro valor'}</span>
+                </button>
+              </div>
+            )}
+
+            {/* CAMPO DE ENTRADA CUANDO ESTÁ ACTIVO "OTRO VALOR" */}
+            {esOtroValor && (
+              <div className="p-3 bg-slate-950 rounded-xl border border-amber-500/40 space-y-2.5 animate-in fade-in duration-150">
+                <div className="flex items-center justify-between text-xs text-amber-400 font-semibold">
+                  <span>Ingresa el valor personalizado:</span>
+                  <span className="font-mono text-sm font-bold text-white">
+                    ${parseFloat(valorPersonalizadoInput || 0).toFixed(2)}
+                  </span>
+                </div>
+
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-base font-bold text-amber-400 font-mono">
+                    $
+                  </span>
+                  <input
+                    type="number"
+                    step="0.25"
+                    min="0"
+                    autoFocus
+                    inputMode="decimal"
+                    value={valorPersonalizadoInput}
+                    onChange={(e) => setValorPersonalizadoInput(e.target.value)}
+                    placeholder="0.00"
+                    className="w-full pl-8 pr-4 py-2 bg-slate-900 border border-slate-700 focus:border-amber-500 rounded-xl text-white font-mono font-bold text-base focus:outline-none"
+                  />
+                </div>
+
+                {/* Atajos de valores rápidos */}
+                <div className="flex items-center gap-1.5 flex-wrap pt-1">
+                  <span className="text-[10px] text-slate-400 mr-1">Rápidos:</span>
+                  {[3.50, 4.00, 4.50, 5.00, 6.00, 7.00, 8.00, 10.00].map((val) => (
+                    <button
+                      key={val}
+                      type="button"
+                      onClick={() => setValorPersonalizadoInput(val.toString())}
+                      className="px-2 py-1 rounded-lg bg-slate-800 hover:bg-amber-500/20 text-slate-300 hover:text-amber-300 border border-slate-700 text-[11px] font-mono font-semibold transition-colors"
+                    >
+                      ${val.toFixed(2)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Notas opcionales de cocina */}
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-slate-300">
-                Nota de cocina / preparación (opcional):
+                Nota de preparación (opcional):
               </label>
               <input
                 type="text"
                 value={notasVariante}
                 onChange={(e) => setNotasVariante(e.target.value)}
-                placeholder="Ej. Bien frito, sin cebolla, hielo extra..."
-                className="w-full px-3.5 py-2 bg-slate-800 border border-slate-700 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-500"
+                placeholder="Ej. Bien frito, sin cebolla, poco hielo, extra porción..."
+                className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-500"
               />
             </div>
 
-            {/* Acciones del Modal */}
+            {/* Botones de acción del modal */}
             <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
               <button
                 type="button"
-                onClick={() => setProductoParaVariante(null)}
+                onClick={() => {
+                  setProductoParaVariante(null);
+                  setEsOtroValor(false);
+                }}
                 className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white hover:bg-slate-800"
               >
                 Cancelar
@@ -311,11 +434,15 @@ export default function MenuPanel() {
               <button
                 type="button"
                 onClick={handleConfirmarVariante}
-                className="px-5 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs rounded-xl flex items-center gap-1.5 shadow-lg shadow-amber-500/20"
+                className="px-5 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs rounded-xl flex items-center gap-1.5 shadow-lg shadow-amber-500/20 transition-all"
               >
                 <Plus className="w-4 h-4" />
                 <span>
-                  Agregar {precioSeleccionado !== null ? `(${formatearDinero(precioSeleccionado)})` : ''}
+                  Agregar (
+                  {esOtroValor 
+                    ? `$${parseFloat(valorPersonalizadoInput || 0).toFixed(2)}` 
+                    : formatearDinero(precioSeleccionado || productoParaVariante.precioBase)}
+                  )
                 </span>
               </button>
             </div>

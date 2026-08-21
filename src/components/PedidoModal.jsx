@@ -30,6 +30,7 @@ export default function PedidoModal() {
     cambiarCantidad, 
     eliminarProducto, 
     actualizarNotasItem, 
+    actualizarPrecioItem,
     actualizarNotasPedido,
     cancelarPedidoMesa,
     mostrarNotificacion
@@ -39,6 +40,8 @@ export default function PedidoModal() {
   const [tabMovil, setTabMovil] = useState('menu'); // 'menu' | 'pedido' en pantallas pequeñas
   const [editingNoteIndex, setEditingNoteIndex] = useState(null);
   const [tempNote, setTempNote] = useState('');
+  const [editingPriceIndex, setEditingPriceIndex] = useState(null);
+  const [tempPrice, setTempPrice] = useState('');
 
   if (!isPedidoModalOpen || !mesaSeleccionada) return null;
 
@@ -58,6 +61,15 @@ export default function PedidoModal() {
     actualizarNotasItem(index, tempNote);
     setEditingNoteIndex(null);
     setTempNote('');
+  };
+
+  const handleGuardarPrecioItem = (index) => {
+    const num = parseFloat(tempPrice);
+    if (!isNaN(num) && num >= 0) {
+      actualizarPrecioItem(index, num);
+    }
+    setEditingPriceIndex(null);
+    setTempPrice('');
   };
 
   return (
@@ -181,8 +193,21 @@ export default function PedidoModal() {
                             </span>
                           )}
                         </div>
-                        <div className="text-xs text-slate-400 font-mono mt-0.5">
-                          {formatearDinero(item.precioUnitario)} c/u
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <span className="text-xs text-slate-400 font-mono">
+                            {formatearDinero(item.precioUnitario)} c/u
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingPriceIndex(index);
+                              setTempPrice(item.precioUnitario.toString());
+                            }}
+                            className="text-[10px] text-amber-400/80 hover:text-amber-300 underline font-semibold transition-colors"
+                            title="Cambiar precio unitario de este ítem"
+                          >
+                            Editar precio
+                          </button>
                         </div>
                       </div>
 
@@ -248,6 +273,39 @@ export default function PedidoModal() {
                         </button>
                       </div>
                     </div>
+
+                    {/* Formulario rápido para editar precio / otro valor */}
+                    {editingPriceIndex === index && (
+                      <div className="pt-2 flex items-center gap-2 bg-slate-900/90 p-2 rounded-lg border border-amber-500/30">
+                        <span className="text-xs font-bold text-amber-400 font-mono">$</span>
+                        <input
+                          type="number"
+                          step="0.25"
+                          min="0"
+                          inputMode="decimal"
+                          value={tempPrice}
+                          onChange={(e) => setTempPrice(e.target.value)}
+                          placeholder="0.00"
+                          className="w-24 px-2 py-1 bg-slate-950 border border-slate-700 rounded-lg text-xs font-bold font-mono text-white focus:outline-none focus:border-amber-500"
+                          autoFocus
+                        />
+                        <button
+                          type="button"
+                          onClick={() => handleGuardarPrecioItem(index)}
+                          className="px-2 py-1 bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold rounded-lg flex items-center gap-1"
+                        >
+                          <Check className="w-3.5 h-3.5" />
+                          <span>Guardar</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setEditingPriceIndex(null)}
+                          className="p-1 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    )}
 
                     {/* Formulario rápido para editar nota */}
                     {editingNoteIndex === index && (
