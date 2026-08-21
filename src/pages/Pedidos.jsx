@@ -4,22 +4,23 @@ import {
   Search, 
   Filter, 
   Download, 
+  Calendar, 
+  Coins, 
+  CreditCard, 
+  Layers,
+  Users,
   Printer, 
   Trash2, 
-  DollarSign, 
-  CreditCard, 
-  Coins, 
-  Calendar, 
-  ArrowUpDown,
-  AlertCircle,
-  Eye,
-  FileSpreadsheet,
-  FileCode
+  FileSpreadsheet, 
+  FileCode,
+  AlertTriangle,
+  Sparkles,
+  ArrowUpDown
 } from 'lucide-react';
 import { usePedidos } from '../context/PedidoContext';
-import { formatearDinero, formatearFecha, exportarACSV, exportarAJSON } from '../utils/helpers';
+import { formatearDinero, formatearFecha, exportarAJSON, exportarACSV } from '../utils/helpers';
 import TicketModal from '../components/TicketModal';
-import FirebaseModal from '../components/FirebaseModal';
+import DatabaseModal from '../components/DatabaseModal';
 
 export default function Pedidos() {
   const { 
@@ -31,57 +32,69 @@ export default function Pedidos() {
   } = usePedidos();
 
   const [busqueda, setBusqueda] = useState('');
-  const [filtroMetodo, setFiltroMetodo] = useState('todos'); // 'todos' | 'efectivo' | 'transferencia'
-  const [filtroFecha, setFiltroFecha] = useState('todos'); // 'todos' | 'hoy' | 'ayer' | 'semana'
-  const [ordenAEliminar, setOrdenAEliminar] = useState(null);
+  const [filtroMetodo, setFiltroMetodo] = useState('todos'); // 'todos' | 'efectivo' | 'transferencia' | 'mixto' | 'dividido'
+  const [filtroFecha, setFiltroFecha] = useState('todos'); // 'todos' | 'hoy' | 'semana'
+  const [pedidoAEliminar, setPedidoAEliminar] = useState(null);
 
-  // Filtrado de pedidos
+  // Filtrar pedidos
   const pedidosFiltrados = useMemo(() => {
-    const hoy = new Date().toISOString().split('T')[0];
-    
     return pedidosHistorial.filter((p) => {
-      // 1. Filtro por texto / búsqueda
-      const ordenStr = p.numeroOrden ? p.numeroOrden.toString() : '';
-      const mesaStr = p.mesa ? `mesa ${p.mesa}` : '';
-      const prodsStr = (p.productos || []).map((i) => i.nombre).join(' ').toLowerCase();
-      const matchBusqueda = 
-        ordenStr.includes(busqueda.toLowerCase()) ||
-        mesaStr.includes(busqueda.toLowerCase()) ||
-        prodsStr.includes(busqueda.toLowerCase());
-
-      if (busqueda && !matchBusqueda) return false;
+      // 1. Filtro de búsqueda texto
+      const texto = busqueda.toLowerCase().trim();
+      const matchTexto = 
+        !texto ||
+        (p.numeroOrden && p.numeroOrden.toString().includes(texto)) ||
+        (p.mesa && `mesa ${p.mesa}`.toLowerCase().includes(texto)) ||
+        (p.banco && p.banco.toLowerCase().includes(texto)) ||
+        (p.comprobante && p.comprobante.toLowerCase().includes(texto)) ||
+        (p.productos && p.productos.some((prod) => prod.nombre.toLowerCase().includes(texto)));
 
       // 2. Filtro por Método de Pago
-      if (filtroMetodo !== 'todos' && p.metodoPago !== filtroMetodo) {
-        return false;
-      }
+      const matchMetodo = 
+        filtroMetodo === 'todos' || 
+        p.metodoPago === filtroMetodo;
 
       // 3. Filtro por Fecha
-      const fechaP = typeof p.fecha === 'string' ? p.fecha.split('T')[0] : '';
+      let matchFecha = true;
       if (filtroFecha === 'hoy') {
-        return fechaP === hoy;
+        const hoy = new Date().toISOString().split('T')[0];
+        const fechaP = typeof p.fecha === 'string' ? p.fecha.split('T')[0] : '';
+        matchFecha = fechaP === hoy;
       } else if (filtroFecha === 'semana') {
         const hace7Dias = new Date();
         hace7Dias.setDate(hace7Dias.getDate() - 7);
-        return new Date(p.fecha) >= hace7Dias;
+        const fechaP = new Date(p.fecha);
+        matchFecha = fechaP >= hace7Dias;
       }
 
-      return true;
+      return matchTexto && matchMetodo && matchFecha;
     });
   }, [pedidosHistorial, busqueda, filtroMetodo, filtroFecha]);
 
-  // Cálculos del resumen de la vista actual
+  // Cálculos de métricas filtradas considerando pagos mixtos y divididos
   const totalVentas = pedidosFiltrados.reduce((sum, p) => sum + (Number(p.total) || 0), 0);
-  const totalEfectivo = pedidosFiltrados
-    .filter((p) => p.metodoPago === 'efectivo')
-    .reduce((sum, p) => sum + (Number(p.total) || 0), 0);
-  const totalTransferencia = pedidosFiltrados
-    .filter((p) => p.metodoPago === 'transferencia')
-    .reduce((sum, p) => sum + (Number(p.total) || 0), 0);
+  
+  const totalEfectivo = pedidosFiltrados.reduce((sum, p) => {
+    if (p.metodoPago === 'efectivo') return sum + (Number(p.total) || 0);
+    if (p.metodoPago === 'mixto' || p.metodoPago === 'dividido') return sum + (Number(p.montoEfectivo) || 0);
+    return sum;
+  }, 0);
+
+  const totalTransferencia = pedidosFiltrados.reduce((sum, p) => {
+    if (p.metodoPago === 'transferencia') return sum + (Number(p.total) || 0);
+    if (p.metodoPago === 'mixto' || p.metodoPago === 'dividido') return sum + (Number(p.montoTransferencia) || 0);
+    return sum;
+  }, 0);
 
   const handleVerTicket = (pedido) => {
     setTicketPedido(pedido);
     setIsTicketModalOpen(true);
+  };
+
+  const handleConfirmarEliminar = async () => {
+    if (!pedidoAEliminar) return;
+    await eliminarPedidoHistorial(pedidoAEliminar.id);
+    setPedidoAEliminar(null);
   };
 
   const handleExportarCSV = () => {
@@ -113,7 +126,7 @@ export default function Pedidos() {
             <span>Historial de Pedidos Cobrados</span>
           </h1>
           <p className="text-xs sm:text-sm text-slate-400">
-            Registro de todas las órdenes procesadas y sincronizadas en Firestore.
+            Registro sincronizado en Supabase y guardado en memoria local.
           </p>
         </div>
 
@@ -198,6 +211,8 @@ export default function Pedidos() {
             <option value="todos">Todos los Métodos de Pago</option>
             <option value="efectivo">Solo Efectivo</option>
             <option value="transferencia">Solo Transferencia</option>
+            <option value="mixto">Pago Combinado (Mixto)</option>
+            <option value="dividido">Cuentas Separadas (Dividido)</option>
           </select>
         </div>
 
@@ -226,7 +241,7 @@ export default function Pedidos() {
                 <th className="py-3.5 px-4">Mesa</th>
                 <th className="py-3.5 px-4">Fecha y Hora</th>
                 <th className="py-3.5 px-4">Productos</th>
-                <th className="py-3.5 px-4">Método</th>
+                <th className="py-3.5 px-4">Método de Pago</th>
                 <th className="py-3.5 px-4 text-right">Total</th>
                 <th className="py-3.5 px-4 text-center">Acciones</th>
               </tr>
@@ -264,17 +279,33 @@ export default function Pedidos() {
                       ))}
                     </td>
 
-                    {/* Método de Pago */}
+                    {/* Método de Pago con Badges Adaptados */}
                     <td className="py-3.5 px-4">
-                      {pedido.metodoPago === 'efectivo' ? (
+                      {pedido.metodoPago === 'efectivo' && (
                         <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
                           <Coins className="w-3.5 h-3.5" />
                           <span>Efectivo</span>
                         </span>
-                      ) : (
+                      )}
+
+                      {pedido.metodoPago === 'transferencia' && (
                         <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-cyan-500/15 text-cyan-400 border border-cyan-500/30">
                           <CreditCard className="w-3.5 h-3.5" />
-                          <span>Transferencia {pedido.banco ? `(${pedido.banco})` : ''}</span>
+                          <span>Transf {pedido.banco ? `(${pedido.banco})` : ''}</span>
+                        </span>
+                      )}
+
+                      {pedido.metodoPago === 'mixto' && (
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30">
+                          <Layers className="w-3.5 h-3.5" />
+                          <span>Mixto (${pedido.montoEfectivo || 0} + ${pedido.montoTransferencia || 0})</span>
+                        </span>
+                      )}
+
+                      {pedido.metodoPago === 'dividido' && (
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-purple-500/15 text-purple-300 border border-purple-500/30">
+                          <Users className="w-3.5 h-3.5" />
+                          <span>Dividido ({pedido.desglosePagos?.length || 2} pers.)</span>
                         </span>
                       )}
                     </td>
@@ -298,9 +329,9 @@ export default function Pedidos() {
 
                         <button
                           type="button"
-                          onClick={() => setOrdenAEliminar(pedido)}
-                          className="p-1.5 rounded-lg bg-slate-800 hover:bg-rose-950 text-slate-400 hover:text-rose-400 border border-slate-700 transition-colors"
-                          title="Eliminar pedido"
+                          onClick={() => setPedidoAEliminar(pedido)}
+                          className="p-1.5 rounded-lg bg-slate-800 hover:bg-rose-950 text-slate-400 hover:text-rose-400 border border-slate-700 hover:border-rose-800/50 transition-colors"
+                          title="Anular / Eliminar Pedido"
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
@@ -312,9 +343,11 @@ export default function Pedidos() {
               ) : (
                 <tr>
                   <td colSpan={7} className="py-12 text-center text-slate-500">
-                    <Receipt className="w-10 h-10 mx-auto mb-2 opacity-40" />
-                    <p className="font-semibold text-slate-400">No hay pedidos registrados</p>
-                    <p className="text-xs">Los pedidos cobrados desde las mesas aparecerán aquí automáticamente.</p>
+                    <Receipt className="w-12 h-12 mx-auto mb-3 opacity-30 text-slate-400" />
+                    <p className="text-sm font-semibold">No se encontraron pedidos con estos filtros</p>
+                    <p className="text-xs text-slate-600 mt-1">
+                      Las comandas cobradas en las mesas aparecerán aquí automáticamente.
+                    </p>
                   </td>
                 </tr>
               )}
@@ -323,44 +356,47 @@ export default function Pedidos() {
         </div>
       </div>
 
-      {/* Modal de confirmación para eliminar orden */}
-      {ordenAEliminar && (
-        <div className="fixed inset-0 z-70 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className="w-full max-w-sm bg-slate-900 border border-rose-500/40 rounded-2xl p-5 space-y-4 text-center">
+      {/* Modal de Ticket Térmico */}
+      <TicketModal />
+
+      {/* Modal de Database / Supabase */}
+      <DatabaseModal />
+
+      {/* Modal de Confirmación para Anular / Eliminar Pedido */}
+      {pedidoAEliminar && (
+        <div className="fixed inset-0 z-80 flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-in fade-in duration-150">
+          <div className="w-full max-w-sm bg-slate-900 border border-rose-500/50 rounded-2xl p-5 space-y-4 text-center shadow-2xl">
             <div className="w-12 h-12 rounded-full bg-rose-500/20 text-rose-400 mx-auto flex items-center justify-center">
-              <Trash2 className="w-6 h-6" />
+              <AlertTriangle className="w-6 h-6" />
             </div>
             <div>
-              <h4 className="font-bold text-white text-base">¿Eliminar Orden #{ordenAEliminar.numeroOrden}?</h4>
-              <p className="text-xs text-slate-400 mt-1">
-                Esta acción eliminará el pedido de la base de datos de Firestore y de las estadísticas.
+              <h4 className="font-bold text-white text-base">
+                ¿Anular Orden #{pedidoAEliminar.numeroOrden}?
+              </h4>
+              <p className="text-xs text-slate-400 mt-1 leading-relaxed">
+                Este pedido (Mesa {pedidoAEliminar.mesa} • {formatearDinero(pedidoAEliminar.total)}) será <strong>eliminado de Supabase</strong> y del historial de ventas.
               </p>
             </div>
-            <div className="grid grid-cols-2 gap-2 pt-2">
+            <div className="grid grid-cols-2 gap-2 pt-1">
               <button
                 type="button"
-                onClick={() => setOrdenAEliminar(null)}
-                className="py-2 px-3 rounded-xl bg-slate-800 text-slate-300 text-xs font-semibold hover:bg-slate-700"
+                onClick={() => setPedidoAEliminar(null)}
+                className="py-2 px-3 rounded-xl bg-slate-800 text-slate-300 text-xs font-semibold hover:bg-slate-700 transition-colors"
               >
-                Cancelar
+                No, mantener
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  eliminarPedidoHistorial(ordenAEliminar.id);
-                  setOrdenAEliminar(null);
-                }}
-                className="py-2 px-3 rounded-xl bg-rose-600 text-white text-xs font-bold hover:bg-rose-500"
+                onClick={handleConfirmarEliminar}
+                className="py-2 px-3 rounded-xl bg-rose-600 text-white text-xs font-bold hover:bg-rose-500 transition-colors flex items-center justify-center gap-1"
               >
-                Eliminar
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Sí, Anular y Borrar</span>
               </button>
             </div>
           </div>
         </div>
       )}
-
-      <TicketModal />
-      <FirebaseModal />
 
     </div>
   );

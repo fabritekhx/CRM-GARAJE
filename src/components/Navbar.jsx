@@ -6,21 +6,19 @@ import {
   Calculator, 
   BarChart3, 
   Database, 
-  CloudCheck, 
-  CloudOff, 
   Clock, 
-  RefreshCw,
-  Sparkles
+  RefreshCw
 } from 'lucide-react';
 import { usePedidos } from '../context/PedidoContext';
 
 export default function Navbar() {
   const { 
-    isFirebaseConnected, 
+    isSupabaseConnected, 
     sincronizando, 
-    sincronizarConFirestore, 
-    setIsFirebaseModalOpen,
-    mesas 
+    sincronizarConSupabase, 
+    setIsDatabaseModalOpen,
+    mesas,
+    supabaseProjectName
   } = usePedidos();
 
   const [horaActual, setHoraActual] = useState(new Date());
@@ -45,7 +43,6 @@ export default function Navbar() {
               alt="Logo El Garaje" 
               className="h-10 sm:h-12 w-auto object-contain drop-shadow-md rounded-md bg-black/40 p-1 border border-amber-500/30"
               onError={(e) => {
-                // Fallback si la imagen tarda en cargar
                 e.target.style.display = 'none';
               }}
             />
@@ -59,7 +56,7 @@ export default function Navbar() {
             </div>
           </div>
 
-          {/* 2. Navegación Principal (Single line contract) */}
+          {/* 2. Navegación Principal */}
           <nav className="hidden md:flex items-center gap-1.5 lg:gap-2">
             <NavLink
               to="/"
@@ -134,34 +131,32 @@ export default function Navbar() {
               </span>
             </div>
 
-            {/* Estado de Firebase / Configuración */}
+            {/* Estado de Supabase */}
             <button
-              onClick={() => setIsFirebaseModalOpen(true)}
+              onClick={() => setIsDatabaseModalOpen(true)}
               className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all ${
-                isFirebaseConnected
+                isSupabaseConnected
                   ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20'
                   : 'bg-amber-500/10 text-amber-400 border-amber-500/30 hover:bg-amber-500/20'
               }`}
-              title="Click para ver configuración de Firebase"
+              title="Click para ver estado de base de datos Supabase"
             >
               <Database className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">
-                {isFirebaseConnected ? 'Firestore Conectado' : 'Modo Offline / Local'}
+                {isSupabaseConnected ? 'Supabase Conectado' : 'Modo Offline'}
               </span>
-              <span className={`w-2 h-2 rounded-full ${isFirebaseConnected ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
+              <span className={`w-2 h-2 rounded-full ${isSupabaseConnected ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
             </button>
 
             {/* Botón de Sincronización Manual */}
-            {isFirebaseConnected && (
-              <button
-                onClick={sincronizarConFirestore}
-                disabled={sincronizando}
-                className="p-2 rounded-xl bg-slate-800 text-slate-300 hover:text-white hover:bg-slate-700 border border-slate-700 transition-all disabled:opacity-50"
-                title="Sincronizar con Firestore"
-              >
-                <RefreshCw className={`w-4 h-4 ${sincronizando ? 'animate-spin text-amber-400' : ''}`} />
-              </button>
-            )}
+            <button
+              onClick={() => sincronizarConSupabase(true)}
+              disabled={sincronizando}
+              className="p-2 rounded-xl bg-slate-800 text-slate-300 hover:text-white hover:bg-slate-700 border border-slate-700 transition-all disabled:opacity-50"
+              title="Sincronizar con Supabase"
+            >
+              <RefreshCw className={`w-4 h-4 ${sincronizando ? 'animate-spin text-amber-400' : ''}`} />
+            </button>
 
           </div>
         </div>

@@ -49,8 +49,16 @@ export default function Cierres() {
 
     pedidosDelDia.forEach((p) => {
       const tot = Number(p.total) || 0;
-      if (p.metodoPago === 'efectivo') totalEfectivo += tot;
-      if (p.metodoPago === 'transferencia') totalTransferencia += tot;
+      if (p.metodoPago === 'efectivo') {
+        totalEfectivo += tot;
+      } else if (p.metodoPago === 'transferencia') {
+        totalTransferencia += tot;
+      } else if (p.metodoPago === 'mixto' || p.metodoPago === 'dividido') {
+        totalEfectivo += Number(p.montoEfectivo) || 0;
+        totalTransferencia += Number(p.montoTransferencia) || 0;
+      } else {
+        totalEfectivo += tot;
+      }
 
       (p.productos || []).forEach((item) => {
         const key = `${item.nombre}${item.variante ? ` (${item.variante})` : ''}`;

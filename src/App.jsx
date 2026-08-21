@@ -70,7 +70,7 @@ function AppContent() {
             <span>— Sistema de Restaurante y Punto de Venta</span>
           </div>
           <p className="text-[11px] text-slate-600">
-            Base de datos Firestore • Modo Offline • Multiplataforma
+            Base de datos Supabase • Modo Offline • Multiplataforma
           </p>
         </div>
       </footer>

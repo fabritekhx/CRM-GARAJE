@@ -80,12 +80,19 @@ export default function Analisis() {
 
   // Cálculos de KPIs
   const totalVendido = pedidosFiltrados.reduce((sum, p) => sum + (Number(p.total) || 0), 0);
-  const totalEfectivo = pedidosFiltrados
-    .filter((p) => p.metodoPago === 'efectivo')
-    .reduce((sum, p) => sum + (Number(p.total) || 0), 0);
-  const totalTransferencia = pedidosFiltrados
-    .filter((p) => p.metodoPago === 'transferencia')
-    .reduce((sum, p) => sum + (Number(p.total) || 0), 0);
+  
+  const totalEfectivo = pedidosFiltrados.reduce((sum, p) => {
+    if (p.metodoPago === 'efectivo') return sum + (Number(p.total) || 0);
+    if (p.metodoPago === 'mixto' || p.metodoPago === 'dividido') return sum + (Number(p.montoEfectivo) || 0);
+    return sum;
+  }, 0);
+
+  const totalTransferencia = pedidosFiltrados.reduce((sum, p) => {
+    if (p.metodoPago === 'transferencia') return sum + (Number(p.total) || 0);
+    if (p.metodoPago === 'mixto' || p.metodoPago === 'dividido') return sum + (Number(p.montoTransferencia) || 0);
+    return sum;
+  }, 0);
+
   const totalPedidos = pedidosFiltrados.length;
   const ticketPromedio = totalPedidos > 0 ? totalVendido / totalPedidos : 0;
 
@@ -101,10 +108,16 @@ export default function Analisis() {
       const monto = Number(p.total) || 0;
       mapa[f].total += monto;
       mapa[f].cantidad += 1;
+      
       if (p.metodoPago === 'efectivo') {
         mapa[f].efectivo += monto;
       } else if (p.metodoPago === 'transferencia') {
         mapa[f].transferencia += monto;
+      } else if (p.metodoPago === 'mixto' || p.metodoPago === 'dividido') {
+        mapa[f].efectivo += Number(p.montoEfectivo) || 0;
+        mapa[f].transferencia += Number(p.montoTransferencia) || 0;
+      } else {
+        mapa[f].efectivo += monto;
       }
     });
 
@@ -232,6 +245,8 @@ export default function Analisis() {
               <option value="todos">Todos los Métodos</option>
               <option value="efectivo">Solo Efectivo</option>
               <option value="transferencia">Solo Transferencia</option>
+              <option value="mixto">Pago Combinado (Mixto)</option>
+              <option value="dividido">Cuentas Separadas (Dividido)</option>
             </select>
           </div>
 

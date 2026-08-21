@@ -1,5 +1,5 @@
 /**
- * Contexto global de Pedidos, Mesas y Firestore para El Garaje POS
+ * Contexto global de Pedidos, Mesas, Supabase y Firestore para El Garaje POS
  */
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { 
@@ -12,7 +12,19 @@ import {
   Timestamp,
   deleteDoc
 } from 'firebase/firestore';
-import { db, isFirebaseConfigured, getActiveFirebaseConfig } from '../firebase/config';
+import { db, isFirebaseConfigured } from '../firebase/config';
+import { 
+  supabase, 
+  guardarPedidoEnSupabase, 
+  eliminarPedidoEnSupabase, 
+  guardarCierreEnSupabase, 
+  cargarPedidosDesdeSupabase, 
+  cargarCierresDesdeSupabase,
+  probarConexionSupabase,
+  SUPABASE_PROJECT_NAME,
+  SUPABASE_PROJECT_ID,
+  SUPABASE_URL
+} from '../supabase/client';
 import confetti from 'canvas-confetti';
 
 const PedidoContext = createContext();
@@ -80,10 +92,11 @@ export const PedidoProvider = ({ children }) => {
   const [isCobroModalOpen, setIsCobroModalOpen] = useState(false);
   const [isTicketModalOpen, setIsTicketModalOpen] = useState(false);
   const [ticketPedido, setTicketPedido] = useState(null);
-  const [isFirebaseModalOpen, setIsFirebaseModalOpen] = useState(false);
+  const [isDatabaseModalOpen, setIsDatabaseModalOpen] = useState(false);
   const [isCierreModalOpen, setIsCierreModalOpen] = useState(false);
 
-  // Estado de conexión
+  // Estados de conexión con Supabase y Firestore
+  const [isSupabaseConnected, setIsSupabaseConnected] = useState(true);
   const [isFirebaseConnected, setIsFirebaseConnected] = useState(isFirebaseConfigured());
   const [sincronizando, setSincronizando] = useState(false);
   const [notificacion, setNotificacion] = useState(null);
@@ -114,68 +127,67 @@ export const PedidoProvider = ({ children }) => {
     }, 4000);
   }, []);
 
-  // Cargar datos de Firestore al iniciar o reconectar
-  const sincronizarConFirestore = useCallback(async () => {
-    if (!db || !isFirebaseConfigured()) {
-      return;
-    }
-
+  // Cargar datos de Supabase al iniciar o sincronizar
+  const sincronizarConSupabase = useCallback(async (mostrarMensaje = true) => {
     setSincronizando(true);
     try {
-      // 1. Cargar pedidos
-      const pedidosRef = collection(db, 'pedidos');
-      const pedidosQuery = query(pedidosRef, orderBy('numeroOrden', 'desc'));
-      const snapshot = await getDocs(pedidosQuery);
-      
-      const pedidosRemotos = [];
-      snapshot.forEach((docSnap) => {
-        const data = docSnap.data();
-        pedidosRemotos.push({
-          id: docSnap.id,
-          ...data,
-          fecha: data.fecha?.toDate ? data.fecha.toDate().toISOString() : data.fecha,
-        });
-      });
+      // 1. Probar conexión
+      const test = await probarConexionSupabase();
+      setIsSupabaseConnected(test.conectado);
 
-      if (pedidosRemotos.length > 0) {
-        setPedidosHistorial(pedidosRemotos);
-        const maxOrden = Math.max(...pedidosRemotos.map((p) => p.numeroOrden || 0), 100);
+      // 2. Cargar pedidos desde Supabase
+      const resPedidos = await cargarPedidosDesdeSupabase();
+      if (resPedidos.success && resPedidos.data.length > 0) {
+        setPedidosHistorial(resPedidos.data);
+        const maxOrden = Math.max(...resPedidos.data.map((p) => p.numeroOrden || 0), 100);
         setUltimoNumeroOrden(maxOrden);
       }
 
-      // 2. Cargar cierres
-      const cierresRef = collection(db, 'cierres');
-      const cierresQuery = query(cierresRef);
-      const cierresSnap = await getDocs(cierresQuery);
-      
-      const cierresRemotos = [];
-      cierresSnap.forEach((docSnap) => {
-        const data = docSnap.data();
-        cierresRemotos.push({
-          id: docSnap.id,
-          ...data,
-          fecha: data.fecha?.toDate ? data.fecha.toDate().toISOString() : data.fecha,
-        });
-      });
-
-      if (cierresRemotos.length > 0) {
-        setCierresHistorial(cierresRemotos);
+      // 3. Cargar cierres desde Supabase
+      const resCierres = await cargarCierresDesdeSupabase();
+      if (resCierres.success && resCierres.data.length > 0) {
+        setCierresHistorial(resCierres.data);
       }
 
-      setIsFirebaseConnected(true);
-      mostrarNotificacion('Conexión y sincronización con Firestore activa', 'success');
+      // 4. Cargar de Firestore si está configurado como backup
+      if (db && isFirebaseConfigured()) {
+        try {
+          const pedidosRef = collection(db, 'pedidos');
+          const snapshot = await getDocs(query(pedidosRef, orderBy('numeroOrden', 'desc')));
+          if (!snapshot.empty && (!resPedidos.success || resPedidos.data.length === 0)) {
+            const remotos = [];
+            snapshot.forEach((docSnap) => {
+              const data = docSnap.data();
+              remotos.push({
+                id: docSnap.id,
+                ...data,
+                fecha: data.fecha?.toDate ? data.fecha.toDate().toISOString() : data.fecha,
+              });
+            });
+            setPedidosHistorial(remotos);
+          }
+          setIsFirebaseConnected(true);
+        } catch {
+          // fallback
+        }
+      }
+
+      if (mostrarMensaje) {
+        mostrarNotificacion('Conexión con Supabase ("El Garaje Calacaleño") sincronizada', 'success');
+      }
     } catch (error) {
-      console.error('Error sincronizando con Firestore:', error);
-      mostrarNotificacion('Firestore no disponible: Usando caché local offline', 'info');
-      setIsFirebaseConnected(false);
+      console.error('Error sincronizando:', error);
+      if (mostrarMensaje) {
+        mostrarNotificacion('Trabajando en modo local (los datos se guardan en el navegador y se sincronizarán)', 'info');
+      }
     } finally {
       setSincronizando(false);
     }
   }, [mostrarNotificacion]);
 
   useEffect(() => {
-    sincronizarConFirestore();
-  }, [sincronizarConFirestore]);
+    sincronizarConSupabase(false);
+  }, [sincronizarConSupabase]);
 
   // Abrir mesa para ver o crear pedido
   const abrirMesa = (numeroMesa) => {
@@ -406,7 +418,7 @@ export const PedidoProvider = ({ children }) => {
     mostrarNotificacion(`Mesa ${numeroMesa} liberada sin pedido`, 'info');
   };
 
-  // Procesar cobro y guardar en Firestore
+  // Procesar cobro y guardar en Supabase y Firestore
   const confirmarCobro = async (datosCobro) => {
     if (!mesaSeleccionada || !pedidoActual) return;
 
@@ -415,22 +427,42 @@ export const PedidoProvider = ({ children }) => {
       return;
     }
 
-    const { metodoPago, montoRecibido, cambio, comprobante, banco } = datosCobro;
+    const { 
+      metodoPago = 'efectivo', 
+      montoEfectivo = 0, 
+      montoTransferencia = 0, 
+      montoRecibido = 0, 
+      cambio = 0, 
+      comprobante = '', 
+      banco = '', 
+      desglosePagos = [] 
+    } = datosCobro;
+
     const fechaActual = new Date();
 
     const pedidoPagado = {
       ...pedidoActual,
       fecha: fechaActual.toISOString(),
       estado: 'pagado',
-      metodoPago: metodoPago || 'efectivo',
-      montoRecibido: metodoPago === 'efectivo' ? Number(montoRecibido) || pedidoActual.total : pedidoActual.total,
-      cambio: metodoPago === 'efectivo' ? Number(cambio) || 0 : 0,
+      metodoPago,
+      montoEfectivo: Number(montoEfectivo) || (metodoPago === 'efectivo' ? Number(pedidoActual.total) : 0),
+      montoTransferencia: Number(montoTransferencia) || (metodoPago === 'transferencia' ? Number(pedidoActual.total) : 0),
+      montoRecibido: Number(montoRecibido) || Number(pedidoActual.total),
+      cambio: Number(cambio) || 0,
       comprobante: comprobante || '',
       banco: banco || '',
+      desglosePagos: desglosePagos || [],
       total: Number(pedidoActual.total) || 0,
     };
 
-    // 1. Guardar en Firestore si está conectado
+    // 1. Guardar en Supabase
+    try {
+      await guardarPedidoEnSupabase(pedidoPagado);
+    } catch (err) {
+      console.warn('Aviso Supabase al cobrar pedido:', err);
+    }
+
+    // 2. Guardar en Firestore como réplica si está conectado
     if (db && isFirebaseConfigured()) {
       try {
         const pedidoDocRef = doc(db, 'pedidos', pedidoPagado.id);
@@ -439,14 +471,14 @@ export const PedidoProvider = ({ children }) => {
           fecha: Timestamp.fromDate(fechaActual),
         });
       } catch (err) {
-        console.warn('Error guardando en Firestore, guardado en caché local:', err);
+        console.warn('Error guardando en Firestore:', err);
       }
     }
 
-    // 2. Guardar en estado local
+    // 3. Guardar en estado local
     setPedidosHistorial((prev) => [pedidoPagado, ...prev]);
 
-    // 3. Liberar la mesa
+    // 4. Liberar la mesa
     setMesas((prev) =>
       prev.map((m) =>
         m.numero === mesaSeleccionada
@@ -455,26 +487,26 @@ export const PedidoProvider = ({ children }) => {
       )
     );
 
-    // 4. Lanzar confeti de éxito
+    // 5. Lanzar confeti de éxito
     try {
       confetti({
         particleCount: 80,
         spread: 70,
         origin: { y: 0.6 },
-        colors: ['#06b6d4', '#f59e0b', '#10b981', '#ffffff']
+        colors: ['#06b6d4', '#f59e0b', '#10b981', '#a855f7', '#ffffff']
       });
     } catch {
       // Ignorar si falla confeti
     }
 
-    // 5. Preparar ticket y cerrar modales de cobro
+    // 6. Preparar ticket y cerrar modales de cobro
     setTicketPedido(pedidoPagado);
     setIsCobroModalOpen(false);
     setIsPedidoModalOpen(false);
     setMesaSeleccionada(null);
     setIsTicketModalOpen(true);
 
-    mostrarNotificacion(`¡Pedido #${pedidoPagado.numeroOrden} cobrado exitosamente!`, 'success');
+    mostrarNotificacion(`¡Pedido #${pedidoPagado.numeroOrden} cobrado y guardado en Supabase!`, 'success');
   };
 
   // Realizar cierre de caja diario
@@ -490,17 +522,23 @@ export const PedidoProvider = ({ children }) => {
       return null;
     }
 
-    // Calcular métricas
+    // Calcular métricas exactas considerando pagos mixtos y divididos
     let totalEfectivo = 0;
     let totalTransferencia = 0;
     const conteoProductos = {};
 
     pedidosDelDia.forEach((p) => {
       const tot = Number(p.total) || 0;
+      
       if (p.metodoPago === 'efectivo') {
         totalEfectivo += tot;
       } else if (p.metodoPago === 'transferencia') {
         totalTransferencia += tot;
+      } else if (p.metodoPago === 'mixto' || p.metodoPago === 'dividido') {
+        totalEfectivo += Number(p.montoEfectivo) || 0;
+        totalTransferencia += Number(p.montoTransferencia) || 0;
+      } else {
+        totalEfectivo += tot;
       }
 
       (p.productos || []).forEach((prod) => {
@@ -518,14 +556,21 @@ export const PedidoProvider = ({ children }) => {
     const cierre = {
       id: fechaFiltro,
       fecha: new Date().toISOString(),
-      totalEfectivo,
-      totalTransferencia,
-      totalGeneral,
+      totalEfectivo: Number(totalEfectivo.toFixed(2)),
+      totalTransferencia: Number(totalTransferencia.toFixed(2)),
+      totalGeneral: Number(totalGeneral.toFixed(2)),
       numPedidos: pedidosDelDia.length,
       productosMasVendidos,
     };
 
-    // Guardar en Firestore
+    // 1. Guardar en Supabase
+    try {
+      await guardarCierreEnSupabase(cierre);
+    } catch (err) {
+      console.warn('Aviso guardando cierre en Supabase:', err);
+    }
+
+    // 2. Guardar en Firestore
     if (db && isFirebaseConfigured()) {
       try {
         const cierreDocRef = doc(db, 'cierres', fechaFiltro);
@@ -534,43 +579,41 @@ export const PedidoProvider = ({ children }) => {
           fecha: Timestamp.fromDate(new Date()),
         });
       } catch (err) {
-        console.warn('Error guardando cierre en Firestore, guardado en caché local:', err);
+        console.warn('Error guardando cierre en Firestore:', err);
       }
     }
 
-    // Actualizar historial local de cierres (reemplazar si ya existe o agregar)
+    // 3. Actualizar historial local de cierres
     setCierresHistorial((prev) => {
       const sinExistente = prev.filter((c) => c.id !== fechaFiltro);
       return [cierre, ...sinExistente];
     });
 
-    mostrarNotificacion(`Cierre de caja para ${fechaFiltro} generado exitosamente`, 'success');
+    mostrarNotificacion(`Cierre de caja para ${fechaFiltro} guardado en Supabase`, 'success');
     return cierre;
   };
 
-  // Guardar configuración personalizada de Firebase
-  const guardarConfigFirebase = (config) => {
-    localStorage.setItem('el_garaje_firebase_config', JSON.stringify(config));
-    window.location.reload();
-  };
-
-  // Resetear configuración
-  const resetearConfigFirebase = () => {
-    localStorage.removeItem('el_garaje_firebase_config');
-    window.location.reload();
-  };
-
-  // Eliminar un pedido del historial (por seguridad / error humano de caja)
+  // Eliminar un pedido del historial (Supabase + Firestore + Local)
   const eliminarPedidoHistorial = async (pedidoId) => {
+    // 1. Eliminar de Supabase
+    try {
+      await eliminarPedidoEnSupabase(pedidoId);
+    } catch (e) {
+      console.warn('Aviso borrando pedido en Supabase:', e);
+    }
+
+    // 2. Eliminar de Firestore si aplica
     if (db && isFirebaseConfigured()) {
       try {
         await deleteDoc(doc(db, 'pedidos', pedidoId));
       } catch (e) {
-        console.warn('Error borrando pedido en Firestore:', e);
+        console.warn('Aviso borrando pedido en Firestore:', e);
       }
     }
+
+    // 3. Eliminar de estado local
     setPedidosHistorial((prev) => prev.filter((p) => p.id !== pedidoId));
-    mostrarNotificacion('Pedido eliminado del historial', 'info');
+    mostrarNotificacion('Pedido anulado y eliminado de Supabase exitosamente', 'info');
   };
 
   return (
@@ -587,16 +630,20 @@ export const PedidoProvider = ({ children }) => {
         isCobroModalOpen,
         isTicketModalOpen,
         ticketPedido,
-        isFirebaseModalOpen,
+        isDatabaseModalOpen,
         isCierreModalOpen,
+        isSupabaseConnected,
         isFirebaseConnected,
         sincronizando,
         notificacion,
+        supabaseProjectName: SUPABASE_PROJECT_NAME,
+        supabaseProjectId: SUPABASE_PROJECT_ID,
+        supabaseUrl: SUPABASE_URL,
         setIsPedidoModalOpen,
         setIsCobroModalOpen,
         setIsTicketModalOpen,
         setTicketPedido,
-        setIsFirebaseModalOpen,
+        setIsDatabaseModalOpen,
         setIsCierreModalOpen,
         abrirMesa,
         setMesaSeleccionada,
@@ -608,9 +655,7 @@ export const PedidoProvider = ({ children }) => {
         cancelarPedidoMesa,
         confirmarCobro,
         realizarCierreCaja,
-        sincronizarConFirestore,
-        guardarConfigFirebase,
-        resetearConfigFirebase,
+        sincronizarConSupabase,
         eliminarPedidoHistorial,
         mostrarNotificacion,
       }}

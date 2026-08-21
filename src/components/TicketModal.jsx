@@ -2,13 +2,14 @@ import React, { useState } from 'react';
 import { 
   X, 
   Printer, 
-  Download, 
   Check, 
   Receipt, 
   Utensils, 
   Sparkles,
   Trash2,
-  AlertTriangle
+  AlertTriangle,
+  Layers,
+  Users
 } from 'lucide-react';
 import { usePedidos } from '../context/PedidoContext';
 import { formatearDinero, formatearFecha, imprimirTicket } from '../utils/helpers';
@@ -38,13 +39,11 @@ export default function TicketModal() {
     <div className="fixed inset-0 z-70 flex items-center justify-center p-3 sm:p-4 bg-slate-950/85 backdrop-blur-sm animate-in fade-in duration-200">
       <div className="w-full max-w-sm sm:max-w-md bg-slate-900 border border-slate-700 rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
         
-        {/* Cabecera del modal */}
-        <div className="px-5 py-3.5 bg-slate-850 border-b border-slate-800 flex items-center justify-between">
+        {/* Header del Modal */}
+        <div className="px-6 py-3.5 bg-slate-850 border-b border-slate-800 flex items-center justify-between no-print">
           <div className="flex items-center gap-2">
             <Receipt className="w-5 h-5 text-amber-400" />
-            <h3 className="font-bold text-sm text-white">
-              Comprobante de Venta
-            </h3>
+            <h3 className="font-bold text-sm text-white">Comprobante de Venta</h3>
           </div>
           <button
             onClick={() => setIsTicketModalOpen(false)}
@@ -54,51 +53,50 @@ export default function TicketModal() {
           </button>
         </div>
 
-        {/* TICKET IMPRIMIBLE */}
-        <div className="flex-1 overflow-y-auto p-4 bg-slate-950 flex justify-center">
+        {/* CONTENEDOR DEL TICKET TÉRMICO (Imprimible) */}
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-slate-950 flex justify-center">
           
-          <div
-            id="printable-ticket"
-            className="w-full max-w-[340px] bg-white text-slate-900 font-mono text-xs p-5 rounded-xl shadow-lg border border-slate-200"
+          {/* Formato de Ticket Térmico de 80mm */}
+          <div 
+            id="ticket-termico"
+            className="w-full max-w-[320px] bg-white text-slate-900 p-4 rounded-xl shadow-inner font-mono text-xs space-y-3 print:p-0 print:shadow-none print:w-full"
           >
-            {/* Encabezado del Ticket */}
-            <div className="text-center pb-3 border-b border-dashed border-slate-300 space-y-1">
-              <div className="flex justify-center mb-1">
-                <img 
-                  src="https://eyzcuxspypnnwzzatnzs.supabase.co/storage/v1/object/public/Imagen/EL%20GARAJE.png" 
-                  alt="El Garaje" 
-                  className="h-14 w-auto object-contain mx-auto"
-                />
-              </div>
-              <h2 className="font-black text-lg text-slate-950 tracking-tight leading-tight uppercase">
-                EL GARAJE
-              </h2>
-              <p className="text-[11px] font-bold text-slate-700">
-                PUNTO DE VENTA & RESTAURANTE
+            {/* Cabecera del Ticket */}
+            <div className="text-center space-y-1 pb-2 border-b border-dashed border-slate-300">
+              <img 
+                src="https://eyzcuxspypnnwzzatnzs.supabase.co/storage/v1/object/public/Imagen/EL%20GARAJE.png" 
+                alt="El Garaje" 
+                className="h-12 w-auto mx-auto object-contain filter grayscale contrast-125"
+                onError={(e) => { e.target.style.display = 'none'; }}
+              />
+              <h2 className="font-black text-base tracking-tight text-slate-900">EL GARAJE</h2>
+              <p className="text-[10px] text-slate-600 font-sans">
+                Especialidad en Pescados y Mariscos
               </p>
-              <p className="text-[10px] text-slate-500">
-                RUC: 0999999999001
+              <p className="text-[9px] text-slate-500 font-sans">
+                RUC: 1792837465001 • Calacalí, Ecuador
               </p>
             </div>
 
-            {/* Metadatos del Pedido */}
-            <div className="py-2.5 border-b border-dashed border-slate-300 text-[11px] space-y-1 text-slate-700">
-              <div className="flex justify-between font-bold text-slate-900">
+            {/* Metadatos de la Orden */}
+            <div className="text-[11px] space-y-0.5 pb-2 border-b border-dashed border-slate-300">
+              <div className="flex justify-between font-bold">
                 <span>ORDEN: #{ticketPedido.numeroOrden}</span>
                 <span>MESA: {ticketPedido.mesa}</span>
               </div>
-              <div className="flex justify-between text-[10px]">
-                <span>FECHA:</span>
-                <span>{formatearFecha(ticketPedido.fecha, 'dd/MM/yyyy HH:mm')}</span>
+              <div className="flex justify-between text-[10px] text-slate-600">
+                <span>FECHA: {formatearFecha(ticketPedido.fecha, "dd/MM/yyyy")}</span>
+                <span>HORA: {formatearFecha(ticketPedido.fecha, "hh:mm a")}</span>
               </div>
-              <div className="flex justify-between text-[10px]">
-                <span>ESTADO:</span>
-                <span className="font-bold text-emerald-700 uppercase">PAGADO</span>
-              </div>
+              {ticketPedido.notas && (
+                <div className="text-[10px] text-slate-700 bg-slate-100 p-1 rounded mt-1 font-sans">
+                  <strong>Nota:</strong> {ticketPedido.notas}
+                </div>
+              )}
             </div>
 
             {/* Tabla de Productos */}
-            <div className="py-3 border-b border-dashed border-slate-300 space-y-2">
+            <div className="py-2 border-b border-dashed border-slate-300 space-y-1.5">
               <div className="grid grid-cols-12 font-bold text-[10px] text-slate-600 pb-1 border-b border-slate-200">
                 <span className="col-span-2">CANT</span>
                 <span className="col-span-7">DESCRIPCIÓN</span>
@@ -124,24 +122,30 @@ export default function TicketModal() {
                     )}
                   </div>
                   <span className="col-span-3 text-right font-bold text-slate-900">
-                    {formatearDinero(item.precioUnitario * item.cantidad)}
+                    {formatearDinero((Number(item.precioUnitario) || 0) * (Number(item.cantidad) || 1))}
                   </span>
                 </div>
               ))}
             </div>
 
-            {/* Totales y Pago */}
-            <div className="py-3 border-b border-dashed border-slate-300 space-y-1.5 text-[11px]">
+            {/* Totales y Formas de Pago */}
+            <div className="py-2 border-b border-dashed border-slate-300 space-y-1.5 text-[11px]">
               <div className="flex justify-between font-black text-sm text-slate-950 pt-1">
                 <span>TOTAL:</span>
                 <span>{formatearDinero(ticketPedido.total)}</span>
               </div>
               
+              {/* Formas de Pago Específicas */}
               <div className="flex justify-between text-[10px] text-slate-600 pt-1 border-t border-slate-200">
-                <span>MÉTODO DE PAGO:</span>
-                <span className="font-bold uppercase">{ticketPedido.metodoPago || 'Efectivo'}</span>
+                <span>MÉTODO:</span>
+                <span className="font-bold uppercase">
+                  {ticketPedido.metodoPago === 'mixto' ? 'Pago Combinado (Mixto)' : 
+                   ticketPedido.metodoPago === 'dividido' ? 'Cuentas Separadas (Dividido)' : 
+                   ticketPedido.metodoPago || 'Efectivo'}
+                </span>
               </div>
 
+              {/* EFECTIVO SIMPLE */}
               {ticketPedido.metodoPago === 'efectivo' && (
                 <>
                   <div className="flex justify-between text-[10px] text-slate-600">
@@ -155,6 +159,7 @@ export default function TicketModal() {
                 </>
               )}
 
+              {/* TRANSFERENCIA SIMPLE */}
               {ticketPedido.metodoPago === 'transferencia' && (
                 <>
                   {ticketPedido.banco && (
@@ -165,20 +170,63 @@ export default function TicketModal() {
                   )}
                   {ticketPedido.comprobante && (
                     <div className="flex justify-between text-[10px] text-slate-600">
-                      <span>REF:</span>
+                      <span>REF / COMPROBANTE:</span>
                       <span>{ticketPedido.comprobante}</span>
                     </div>
                   )}
                 </>
               )}
+
+              {/* PAGO MIXTO (EFECTIVO + TRANSFERENCIA) */}
+              {ticketPedido.metodoPago === 'mixto' && (
+                <div className="bg-slate-50 p-2 rounded border border-slate-200 space-y-1 text-[10px]">
+                  <div className="flex justify-between text-slate-700">
+                    <span>• Transferencia ({ticketPedido.banco || 'DeUna'}):</span>
+                    <span className="font-bold font-mono">{formatearDinero(ticketPedido.montoTransferencia)}</span>
+                  </div>
+                  {ticketPedido.comprobante && (
+                    <div className="text-[9px] text-slate-500 italic pl-2">
+                      Ref: {ticketPedido.comprobante}
+                    </div>
+                  )}
+                  <div className="flex justify-between text-slate-700">
+                    <span>• Efectivo:</span>
+                    <span className="font-bold font-mono">{formatearDinero(ticketPedido.montoEfectivo)}</span>
+                  </div>
+                  {ticketPedido.cambio > 0 && (
+                    <div className="flex justify-between text-slate-900 font-bold pt-0.5 border-t border-slate-200">
+                      <span>Vuelto entregado:</span>
+                      <span className="font-mono">{formatearDinero(ticketPedido.cambio)}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* PAGO DIVIDIDO / CUENTAS SEPARADAS */}
+              {ticketPedido.metodoPago === 'dividido' && (
+                <div className="bg-slate-50 p-2 rounded border border-slate-200 space-y-1 text-[10px]">
+                  <span className="font-bold block text-slate-700">Desglose por Comensal:</span>
+                  {(ticketPedido.desglosePagos || []).map((p, i) => (
+                    <div key={i} className="flex justify-between text-slate-600 border-b border-slate-100 pb-0.5">
+                      <span>{p.persona} ({p.metodo === 'efectivo' ? 'Efec' : 'Transf'}):</span>
+                      <span className="font-mono font-semibold">{formatearDinero(p.monto)}</span>
+                    </div>
+                  ))}
+                  <div className="flex justify-between font-bold text-slate-800 pt-0.5">
+                    <span>Total Efectivo: {formatearDinero(ticketPedido.montoEfectivo)}</span>
+                    <span>Transf: {formatearDinero(ticketPedido.montoTransferencia)}</span>
+                  </div>
+                </div>
+              )}
+
             </div>
 
             {/* Pie del Ticket */}
-            <div className="text-center pt-3 text-[10px] text-slate-500 space-y-1">
+            <div className="text-center pt-2 text-[10px] text-slate-500 space-y-1">
               <p className="font-bold text-slate-700">¡GRACIAS POR SU COMPRA!</p>
               <p>Esperamos verle pronto en El Garaje</p>
               <p className="text-[8px] text-slate-400 font-mono">
-                Documento no válido como factura tributaria
+                Sistema El Garaje POS • Supabase Database
               </p>
             </div>
 
@@ -187,7 +235,7 @@ export default function TicketModal() {
         </div>
 
         {/* Botonera de Acción */}
-        <div className="p-4 bg-slate-900 border-t border-slate-800 flex flex-wrap items-center justify-between gap-2">
+        <div className="p-4 bg-slate-900 border-t border-slate-800 flex flex-wrap items-center justify-between gap-2 no-print shrink-0">
           <button
             type="button"
             onClick={() => setMostrarConfirmacionEliminar(true)}
@@ -232,7 +280,7 @@ export default function TicketModal() {
                 ¿Anular Orden #{ticketPedido.numeroOrden}?
               </h4>
               <p className="text-xs text-slate-400 mt-1 leading-relaxed">
-                Este pedido será <strong>eliminado permanentemente</strong> de la base de datos Firestore, del historial de cobros y de los reportes estadísticos.
+                Este pedido será <strong>eliminado de la base de datos de Supabase</strong>, del historial de ventas y de los cierres de caja.
               </p>
             </div>
             <div className="grid grid-cols-2 gap-2 pt-1">
