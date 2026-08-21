@@ -9,7 +9,8 @@ import {
   Check, 
   Sparkles,
   X,
-  Layers
+  Layers,
+  Citrus
 } from 'lucide-react';
 import { CATEGORIAS, MENU } from '../data/menu';
 import { usePedidos } from '../context/PedidoContext';
@@ -84,6 +85,7 @@ export default function MenuPanel() {
   const getCategoriaIcon = (id) => {
     switch (id) {
       case 'pescados': return <Fish className="w-4 h-4" />;
+      case 'jugos': return <Citrus className="w-4 h-4" />;
       case 'gaseosas': return <CupSoda className="w-4 h-4" />;
       case 'cervezas': return <Beer className="w-4 h-4" />;
       case 'porciones': return <UtensilsCrossed className="w-4 h-4" />;

@@ -5,12 +5,42 @@
 
 export const CATEGORIAS = [
   { id: 'pescados', nombre: 'Pescados', icono: 'Fish', color: 'bg-cyan-500/10 text-cyan-400 border-cyan-500/30' },
+  { id: 'jugos', nombre: 'Jugos', icono: 'Citrus', color: 'bg-orange-500/10 text-orange-400 border-orange-500/30' },
   { id: 'gaseosas', nombre: 'Gaseosas', icono: 'CupSoda', color: 'bg-amber-500/10 text-amber-400 border-amber-500/30' },
   { id: 'cervezas', nombre: 'Cervezas', icono: 'Beer', color: 'bg-yellow-500/10 text-yellow-400 border-yellow-500/30' },
   { id: 'porciones', nombre: 'Porciones Extras', icono: 'UtensilsCrossed', color: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' },
 ];
 
 export const MENU = [
+  // JUGOS
+  {
+    id: 'j-jarra',
+    nombre: 'Jarra',
+    categoria: 'jugos',
+    precioBase: 2.00,
+    descripcion: 'Jarra grande de jugo natural',
+    sabores: ['Mora', 'Maracuyá', 'Guanábana', 'Naranjilla', 'Tomate de Árbol', 'Taxo', 'Guanábana c/ leche'],
+    tipoVariante: 'sabor',
+  },
+  {
+    id: 'j-jarra-media',
+    nombre: 'Jarra ½',
+    categoria: 'jugos',
+    precioBase: 1.25,
+    descripcion: 'Media jarra (½) de jugo natural',
+    sabores: ['Mora', 'Maracuyá', 'Guanábana', 'Naranjilla', 'Tomate de Árbol', 'Taxo', 'Guanábana c/ leche'],
+    tipoVariante: 'sabor',
+  },
+  {
+    id: 'j-vaso-personal',
+    nombre: 'Vaso de jugo personal',
+    categoria: 'jugos',
+    precioBase: 1.25,
+    descripcion: 'Vaso individual de jugo natural fresco',
+    sabores: ['Mora', 'Maracuyá', 'Guanábana', 'Naranjilla', 'Tomate de Árbol', 'Taxo', 'Guanábana c/ leche'],
+    tipoVariante: 'sabor',
+  },
+
   // GASEOSAS
   {
     id: 'g-cola-personal',
