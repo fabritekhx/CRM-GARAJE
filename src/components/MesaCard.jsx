@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { 
   Users, 
   DollarSign, 
@@ -6,25 +6,44 @@ import {
   Clock, 
   AlertCircle,
   ChevronRight,
-  Bike
+  Bike,
+  Trash2,
+  AlertTriangle
 } from 'lucide-react';
 import { usePedidos } from '../context/PedidoContext';
 import { formatearDinero, formatearHora } from '../utils/helpers';
 
 export default function MesaCard({ mesa }) {
-  const { abrirMesa, setMesaSeleccionada, setIsCobroModalOpen } = usePedidos();
+  const { abrirMesa, setMesaSeleccionada, setIsCobroModalOpen, eliminarMesa } = usePedidos();
+  const [mostrarConfirmacionBorrar, setMostrarConfirmacionBorrar] = useState(false);
 
   const estaOcupada = mesa.estado === 'ocupada' && mesa.pedidoActual;
   const pedido = mesa.pedidoActual;
   const cantidadItems = pedido?.productos?.reduce((acc, item) => acc + (item.cantidad || 0), 0) || 0;
   const total = pedido?.total || 0;
-  const esDomicilio = mesa.numero === 'Domicilio' || mesa.tipo === 'domicilio';
+  const esDomicilio = mesa.tipo === 'domicilio' || String(mesa.numero).toLowerCase().includes('dom');
 
   const handleCobroRapido = (e) => {
     e.stopPropagation();
     if (!estaOcupada || cantidadItems === 0) return;
     setMesaSeleccionada(mesa.numero);
     setIsCobroModalOpen(true);
+  };
+
+  const handleAbrirConfirmarBorrado = (e) => {
+    e.stopPropagation();
+    setMostrarConfirmacionBorrar(true);
+  };
+
+  const handleConfirmarBorrado = (e) => {
+    e.stopPropagation();
+    eliminarMesa(mesa.id || mesa.numero);
+    setMostrarConfirmacionBorrar(false);
+  };
+
+  const handleCancelarBorrado = (e) => {
+    e.stopPropagation();
+    setMostrarConfirmacionBorrar(false);
   };
 
   return (
@@ -40,10 +59,10 @@ export default function MesaCard({ mesa }) {
     >
       {/* Indicador de estado superior */}
       <div className="p-5">
-        <div className="flex items-center justify-between gap-3 mb-4">
-          <div className="flex items-center gap-3">
+        <div className="flex items-center justify-between gap-2 mb-4">
+          <div className="flex items-center gap-3 min-w-0">
             <div
-              className={`w-12 h-12 rounded-xl flex items-center justify-center font-black text-xl tracking-tight transition-transform group-hover:scale-105 ${
+              className={`w-12 h-12 rounded-xl flex items-center justify-center font-black text-lg tracking-tight transition-transform group-hover:scale-105 shrink-0 ${
                 estaOcupada
                   ? 'bg-amber-500 text-slate-950 shadow-lg shadow-amber-500/30'
                   : esDomicilio
@@ -53,41 +72,56 @@ export default function MesaCard({ mesa }) {
             >
               {esDomicilio ? <Bike className="w-6 h-6" /> : `M${mesa.numero}`}
             </div>
-            <div>
-              <h3 className="font-bold text-lg text-white group-hover:text-amber-400 transition-colors">
-                {esDomicilio ? 'A Domicilio' : `Mesa ${mesa.numero}`}
+            <div className="min-w-0">
+              <h3 className="font-bold text-base sm:text-lg text-white group-hover:text-amber-400 transition-colors truncate">
+                {mesa.nombre || (esDomicilio ? 'A Domicilio' : `Mesa ${mesa.numero}`)}
               </h3>
-              <div className="flex items-center gap-1.5 text-xs text-slate-400">
+              <div className="flex items-center gap-1.5 text-xs text-slate-400 truncate">
                 {esDomicilio ? (
                   <>
-                    <Bike className="w-3.5 h-3.5 text-cyan-400" />
-                    <span className="text-cyan-300/90">Entrega / Para Llevar</span>
+                    <Bike className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+                    <span className="text-cyan-300/90 truncate">
+                      {pedido?.notas ? pedido.notas.replace('Cliente: ', '') : 'Entrega / Para Llevar'}
+                    </span>
                   </>
                 ) : (
                   <>
-                    <Users className="w-3.5 h-3.5" />
-                    <span>Salón Principal</span>
+                    <Users className="w-3.5 h-3.5 shrink-0" />
+                    <span className="truncate">Salón Principal</span>
                   </>
                 )}
               </div>
             </div>
           </div>
 
-          {/* Badge de Estado */}
-          <span
-            className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${
-              estaOcupada
-                ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30 animate-pulse'
-                : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-            }`}
-          >
+          {/* Badges y Botón Eliminar */}
+          <div className="flex items-center gap-1.5 shrink-0">
+            {/* Botón para eliminar mesa / domicilio */}
+            <button
+              type="button"
+              onClick={handleAbrirConfirmarBorrado}
+              title={esDomicilio ? 'Eliminar este pedido a domicilio' : 'Eliminar esta mesa'}
+              className="p-1.5 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-500/10 border border-transparent hover:border-red-500/20 transition-colors opacity-80 hover:opacity-100"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+
+            {/* Badge de Estado */}
             <span
-              className={`w-2 h-2 rounded-full ${
-                estaOcupada ? 'bg-amber-400' : 'bg-emerald-400'
+              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider ${
+                estaOcupada
+                  ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30 animate-pulse'
+                  : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
               }`}
-            />
-            {estaOcupada ? 'Ocupada' : 'Libre'}
-          </span>
+            >
+              <span
+                className={`w-2 h-2 rounded-full ${
+                  estaOcupada ? 'bg-amber-400' : 'bg-emerald-400'
+                }`}
+              />
+              {estaOcupada ? 'Ocupada' : 'Libre'}
+            </span>
+          </div>
         </div>
 
         {/* Contenido según el estado */}
@@ -191,6 +225,42 @@ export default function MesaCard({ mesa }) {
           </div>
         )}
       </div>
+
+      {/* Modal de confirmación para eliminar mesa o domicilio */}
+      {mostrarConfirmacionBorrar && (
+        <div 
+          onClick={(e) => e.stopPropagation()}
+          className="absolute inset-0 z-20 bg-slate-950/95 backdrop-blur-sm p-4 flex flex-col items-center justify-center text-center space-y-3 animate-in fade-in duration-150"
+        >
+          <div className="w-10 h-10 rounded-full bg-red-500/20 text-red-400 flex items-center justify-center">
+            <AlertTriangle className="w-5 h-5" />
+          </div>
+          <div>
+            <h4 className="font-bold text-sm text-white">
+              ¿Eliminar {esDomicilio ? 'este Domicilio' : `Mesa ${mesa.numero}`}?
+            </h4>
+            <p className="text-[11px] text-slate-400 mt-0.5">
+              {estaOcupada ? 'Tiene productos sin cobrar que se cancelarán.' : 'Se quitará del tablero principal.'}
+            </p>
+          </div>
+          <div className="flex items-center gap-2 w-full pt-1">
+            <button
+              type="button"
+              onClick={handleCancelarBorrado}
+              className="flex-1 py-1.5 px-2 rounded-lg bg-slate-800 text-slate-300 text-xs font-semibold hover:bg-slate-700 transition-colors"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              onClick={handleConfirmarBorrado}
+              className="flex-1 py-1.5 px-2 rounded-lg bg-red-500 hover:bg-red-400 text-white text-xs font-bold transition-colors shadow-md shadow-red-500/20"
+            >
+              Sí, Eliminar
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

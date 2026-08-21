@@ -133,9 +133,473 @@ export const exportarACSV = (datos, nombreArchivo = 'el_garaje_ventas.csv') => {
   }
 };
 
+import jsPDF from 'jspdf';
+
 /**
- * Imprime el ticket de venta usando la función de impresión nativa del navegador
+ * Crea el documento jsPDF vectorial para el ticket térmico (80mm)
+ * Sin dependencias de renderizado HTML/CSS ni errores de color oklch.
  */
-export const imprimirTicket = () => {
-  window.print();
+export const crearDocumentoPDFTicket = (pedido) => {
+  if (!pedido) return null;
+
+  const productos = pedido.productos || [];
+  
+  // Calcular altura dinámica estimada
+  let alturaCalculada = 95;
+  alturaCalculada += productos.length * 8;
+  if (pedido.notas) alturaCalculada += 12;
+  if (pedido.metodoPago === 'mixto' || pedido.metodoPago === 'dividido') alturaCalculada += 20;
+  if (pedido.banco || pedido.comprobante) alturaCalculada += 10;
+
+  const ancho = 80; // 80mm ancho estándar
+  const alto = Math.max(115, Math.ceil(alturaCalculada));
+
+  const doc = new jsPDF({
+    orientation: 'portrait',
+    unit: 'mm',
+    format: [ancho, alto],
+  });
+
+  const margen = 5;
+  const anchoContenido = ancho - margen * 2; // 70mm
+  let y = 7;
+
+  // Cabecera
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(12);
+  doc.setTextColor(0, 0, 0);
+  doc.text('EL GARAJE CALACALE\u00D1O', ancho / 2, y, { align: 'center' });
+  y += 4;
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7.5);
+  doc.text('Comida tradicional del Ecuador', ancho / 2, y, { align: 'center' });
+  y += 3.5;
+  doc.text('RUC: 1710793256001 \u2022 Calacal\u00ED, Ecuador', ancho / 2, y, { align: 'center' });
+  y += 4;
+
+  // Línea punteada
+  doc.setLineDashPattern([1, 1], 0);
+  doc.setDrawColor(80, 80, 80);
+  doc.setLineWidth(0.2);
+  doc.line(margen, y, ancho - margen, y);
+  y += 4;
+
+  // Datos de la comanda / mesa
+  doc.setFontSize(8.5);
+  const esDomicilio = String(pedido.mesa).toLowerCase().includes('dom');
+  const atendidoTexto = esDomicilio ? `DOMICILIO: ${pedido.mesa}` : `MESA: ${pedido.mesa}`;
+  
+  doc.setFont('helvetica', 'bold');
+  doc.text(atendidoTexto, margen, y);
+  doc.text(`ORDEN #${pedido.numeroOrden || '---'}`, ancho - margen, y, { align: 'right' });
+  y += 4;
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7.5);
+  const fechaStr = formatearFecha(pedido.fecha, 'dd/MM/yyyy');
+  const horaStr = formatearFecha(pedido.fecha, 'hh:mm a');
+  doc.text(`Fecha: ${fechaStr}`, margen, y);
+  doc.text(`Hora: ${horaStr}`, ancho - margen, y, { align: 'right' });
+  y += 4;
+
+  if (pedido.notas) {
+    doc.setFontSize(7);
+    const lineasNotas = doc.splitTextToSize(`Nota: ${pedido.notas}`, anchoContenido);
+    doc.text(lineasNotas, margen, y);
+    y += lineasNotas.length * 3.2 + 1;
+    doc.setFontSize(7.5);
+  }
+
+  // Línea separadora
+  doc.line(margen, y, ancho - margen, y);
+  y += 4;
+
+  // Encabezados de productos
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(7.5);
+  doc.text('CANT', margen, y);
+  doc.text('DESCRIPCI\u00D3N', margen + 10, y);
+  doc.text('TOTAL', ancho - margen, y, { align: 'right' });
+  y += 3.5;
+
+  doc.setLineDashPattern([], 0);
+  doc.setLineWidth(0.2);
+  doc.line(margen, y - 0.5, ancho - margen, y - 0.5);
+  y += 1;
+
+  // Lista de Productos
+  productos.forEach((item) => {
+    const cant = item.cantidad || 1;
+    const precio = Number(item.precioUnitario) || 0;
+    const totalItem = cant * precio;
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7.5);
+    doc.text(`${cant}x`, margen, y);
+
+    doc.setFont('helvetica', 'normal');
+    let desc = item.nombre || '';
+    if (item.variante) desc += ` (${item.variante})`;
+    const lineasDesc = doc.splitTextToSize(desc, 44);
+    doc.text(lineasDesc, margen + 10, y);
+
+    doc.setFont('helvetica', 'bold');
+    doc.text(formatearDinero(totalItem), ancho - margen, y, { align: 'right' });
+
+    const alturaItem = Math.max(lineasDesc.length * 3.2, 4);
+    y += alturaItem;
+
+    if (item.notas) {
+      doc.setFont('helvetica', 'italic');
+      doc.setFontSize(6.5);
+      doc.text(`* ${item.notas}`, margen + 10, y);
+      y += 2.8;
+      doc.setFontSize(7.5);
+    }
+  });
+
+  // Línea de totales
+  y += 1;
+  doc.setLineDashPattern([1, 1], 0);
+  doc.line(margen, y, ancho - margen, y);
+  y += 4.5;
+
+  // Total
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(10.5);
+  doc.text('TOTAL A PAGAR:', margen, y);
+  doc.text(formatearDinero(pedido.total), ancho - margen, y, { align: 'right' });
+  y += 4.5;
+
+  // Método de pago
+  doc.setFontSize(7.5);
+  doc.setFont('helvetica', 'normal');
+  const metodoPagoStr =
+    pedido.metodoPago === 'mixto'
+      ? 'Pago Combinado (Mixto)'
+      : pedido.metodoPago === 'dividido'
+      ? 'Cuentas Separadas'
+      : (pedido.metodoPago ? pedido.metodoPago.toUpperCase() : 'EFECTIVO');
+
+  doc.text(`M\u00E9todo de pago: ${metodoPagoStr}`, margen, y);
+  y += 3.5;
+
+  if (pedido.metodoPago === 'efectivo') {
+    if (pedido.montoRecibido > 0) {
+      doc.text(`Recibido: ${formatearDinero(pedido.montoRecibido)}`, margen, y);
+      doc.text(`Cambio: ${formatearDinero(pedido.cambio || 0)}`, ancho - margen, y, { align: 'right' });
+      y += 3.5;
+    }
+  } else if (pedido.metodoPago === 'transferencia') {
+    if (pedido.banco) {
+      doc.text(`Banco: ${pedido.banco}`, margen, y);
+      y += 3.5;
+    }
+    if (pedido.comprobante) {
+      doc.text(`Ref/Comprobante: ${pedido.comprobante}`, margen, y);
+      y += 3.5;
+    }
+  } else if (pedido.metodoPago === 'mixto') {
+    doc.text(`\u2022 Transf (${pedido.banco || 'DeUna'}): ${formatearDinero(pedido.montoTransferencia)}`, margen, y);
+    y += 3.5;
+    doc.text(`\u2022 Efectivo: ${formatearDinero(pedido.montoEfectivo)}`, margen, y);
+    y += 3.5;
+    if (pedido.cambio > 0) {
+      doc.text(`\u2022 Vuelto: ${formatearDinero(pedido.cambio)}`, margen, y);
+      y += 3.5;
+    }
+  }
+
+  // Pie de comprobante
+  y += 2;
+  doc.setLineDashPattern([1, 1], 0);
+  doc.line(margen, y, ancho - margen, y);
+  y += 4;
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(7.5);
+  doc.text('\u00A1GRACIAS POR SU PREFERENCIA!', ancho / 2, y, { align: 'center' });
+  y += 3.2;
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(6.5);
+  doc.text('Esperamos verle pronto en El Garaje Calacale\u00F1o', ancho / 2, y, { align: 'center' });
+  y += 2.8;
+  doc.text('Sistema El Garaje Calacale\u00F1o POS', ancho / 2, y, { align: 'center' });
+
+  return doc;
 };
+
+/**
+ * Imprime el ticket de venta con máxima compatibilidad (móvil, iframe de vista previa, ventana emergente y CSS print).
+ * Garantiza texto nítido, sin fondos negros ni páginas en blanco.
+ */
+export const imprimirTicket = (elementoId = 'ticket-termico') => {
+  try {
+    const elemento = document.getElementById(elementoId);
+    
+    // Método 1: Apertura de ventana dedicada de impresión limpia
+    // Esto asegura que en cualquier navegador, iframe o webview móvil se abra la orden limpia en blanco
+    if (elemento) {
+      const ticketHtml = elemento.innerHTML;
+      const printWindow = window.open('', '_blank', 'width=380,height=600,menubar=no,toolbar=no,location=no,status=no,titlebar=no');
+      
+      if (printWindow && printWindow.document) {
+        printWindow.document.open();
+        printWindow.document.write(`
+          <!DOCTYPE html>
+          <html lang="es">
+            <head>
+              <meta charset="utf-8">
+              <title>Comprobante El Garaje Calacaleño</title>
+              <style>
+                @page {
+                  margin: 0;
+                  size: 80mm auto;
+                }
+                * {
+                  box-sizing: border-box;
+                  margin: 0;
+                  padding: 0;
+                  -webkit-print-color-adjust: exact !important;
+                  print-color-adjust: exact !important;
+                }
+                body {
+                  font-family: monospace, 'Courier New', Courier, sans-serif;
+                  font-size: 12px;
+                  color: #000000 !important;
+                  background-color: #ffffff !important;
+                  padding: 12px 8px;
+                  width: 100%;
+                  max-width: 80mm;
+                  margin: 0 auto;
+                }
+                img {
+                  max-height: 48px;
+                  width: auto;
+                  display: block;
+                  margin: 0 auto 6px auto;
+                  filter: grayscale(100%) contrast(150%);
+                }
+                .text-center { text-align: center; }
+                .text-right { text-align: right; }
+                .font-bold { font-weight: bold; }
+                .font-black { font-weight: 900; }
+                .border-b { border-bottom: 1px dashed #444; padding-bottom: 8px; margin-bottom: 8px; }
+                .border-t { border-top: 1px dashed #444; padding-top: 6px; margin-top: 6px; }
+                .grid-item { display: flex; justify-content: space-between; margin-bottom: 4px; }
+                .grid-cols-12 { display: flex; width: 100%; justify-content: space-between; margin-bottom: 4px; }
+                .col-span-2 { width: 15%; font-weight: bold; }
+                .col-span-7 { width: 60%; }
+                .col-span-3 { width: 25%; text-align: right; font-weight: bold; }
+                .space-y-1 > * + * { margin-top: 4px; }
+                .space-y-1\\.5 > * + * { margin-top: 6px; }
+                .space-y-3 > * + * { margin-top: 10px; }
+                .bg-white { background-color: #ffffff !important; }
+                .text-black { color: #000000 !important; }
+                .text-neutral-900 { color: #171717 !important; }
+                .text-neutral-700 { color: #404040 !important; }
+                .text-neutral-600 { color: #525252 !important; }
+                .text-neutral-800 { color: #262626 !important; }
+                .bg-neutral-100, .bg-neutral-50 { background-color: #f5f5f5 !important; border: 1px solid #ddd; }
+              </style>
+            </head>
+            <body>
+              <div id="print-area">
+                ${ticketHtml}
+              </div>
+              <script>
+                window.onload = function() {
+                  setTimeout(function() {
+                    window.focus();
+                    window.print();
+                    setTimeout(function() {
+                      window.close();
+                    }, 500);
+                  }, 200);
+                };
+              </script>
+            </body>
+          </html>
+        `);
+        printWindow.document.close();
+        return;
+      }
+    }
+
+    // Método 2 (Fallback si popup está bloqueado): Iframe oculto
+    const iframeId = 'print-iframe-pos';
+    let iframe = document.getElementById(iframeId);
+    if (iframe) {
+      iframe.remove();
+    }
+
+    iframe = document.createElement('iframe');
+    iframe.id = iframeId;
+    iframe.style.position = 'fixed';
+    iframe.style.right = '0';
+    iframe.style.bottom = '0';
+    iframe.style.width = '0';
+    iframe.style.height = '0';
+    iframe.style.border = 'none';
+    document.body.appendChild(iframe);
+
+    const doc = iframe.contentWindow?.document || iframe.contentDocument;
+    if (doc && elemento) {
+      doc.open();
+      doc.write(`
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <meta charset="utf-8">
+            <title>Comprobante El Garaje Calacaleño</title>
+            <style>
+              @page { margin: 0; size: 80mm auto; }
+              * { box-sizing: border-box; margin: 0; padding: 0; }
+              body {
+                font-family: monospace, 'Courier New', Courier, sans-serif;
+                font-size: 12px;
+                color: #000000 !important;
+                background-color: #ffffff !important;
+                padding: 10px;
+                width: 100%;
+                max-width: 80mm;
+                margin: 0 auto;
+              }
+              img { max-height: 48px; width: auto; display: block; margin: 0 auto 6px auto; filter: grayscale(100%); }
+            </style>
+          </head>
+          <body>
+            ${elemento.innerHTML}
+            <script>
+              window.onload = function() {
+                setTimeout(function() {
+                  window.focus();
+                  window.print();
+                }, 200);
+              };
+            </script>
+          </body>
+        </html>
+      `);
+      doc.close();
+      return;
+    }
+
+    // Método 3 (Fallback directo): window.print()
+    window.print();
+  } catch (error) {
+    console.error('Error al imprimir comprobante:', error);
+    window.print();
+  }
+};
+
+/**
+ * Genera y descarga el comprobante en formato PDF nítido (80mm)
+ */
+export const descargarTicketPDF = async (pedido) => {
+  try {
+    const pdf = crearDocumentoPDFTicket(pedido);
+    if (!pdf) {
+      alert('No se pudo generar el comprobante');
+      return false;
+    }
+
+    const ordenNum = pedido?.numeroOrden || 'POS';
+    const mesaTexto = pedido?.mesa ? `_${pedido.mesa.toString().replace(/\s+/g, '_')}` : '';
+    const nombreArchivo = `Comprobante_ElGaraje_Orden_${ordenNum}${mesaTexto}.pdf`;
+
+    pdf.save(nombreArchivo);
+    return true;
+  } catch (error) {
+    console.error('Error generando PDF:', error);
+    alert('Hubo un error al generar el PDF del comprobante.');
+    return false;
+  }
+};
+
+/**
+ * Genera el texto formateado del comprobante para WhatsApp
+ */
+export const generarTextoTicketWhatsApp = (pedido) => {
+  if (!pedido) return '';
+
+  const fechaStr = formatearFecha(pedido.fecha, 'dd/MM/yyyy hh:mm a');
+  const esDomicilio = String(pedido.mesa).toLowerCase().includes('dom');
+  const atendidoEn = esDomicilio ? '🛵 A Domicilio' : `🍽️ Mesa ${pedido.mesa}`;
+
+  let texto = `*EL GARAJE CALACALEÑO*\n`;
+  texto += `_Comida tradicional del Ecuador_\n`;
+  texto += `RUC: 1710793256001 • Calacalí\n`;
+  texto += `--------------------------------\n`;
+  texto += `📄 *Orden #${pedido.numeroOrden || '---'}*\n`;
+  texto += `📍 *Atención:* ${atendidoEn}\n`;
+  texto += `📅 *Fecha:* ${fechaStr}\n`;
+  if (pedido.notas) {
+    texto += `📝 *Nota/Ref:* ${pedido.notas}\n`;
+  }
+  texto += `--------------------------------\n`;
+  texto += `*DETALLE DEL CONSUMO:*\n`;
+
+  (pedido.productos || []).forEach((item) => {
+    const subtotal = (Number(item.precioUnitario) || 0) * (Number(item.cantidad) || 1);
+    const varianteStr = item.variante ? ` (${item.variante})` : '';
+    texto += `• ${item.cantidad}x ${item.nombre}${varianteStr} ➔ *${formatearDinero(subtotal)}*\n`;
+    if (item.notas) {
+      texto += `  _Nota: ${item.notas}_\n`;
+    }
+  });
+
+  texto += `--------------------------------\n`;
+  texto += `💰 *TOTAL A PAGAR: ${formatearDinero(pedido.total)}*\n`;
+  texto += `💳 *Método de pago:* ${pedido.metodoPago ? pedido.metodoPago.toUpperCase() : 'EFECTIVO'}\n`;
+  if (pedido.banco) texto += `🏦 *Banco:* ${pedido.banco}\n`;
+  if (pedido.comprobante) texto += `🔢 *Comprobante:* ${pedido.comprobante}\n`;
+  if (pedido.montoRecibido > 0) {
+    texto += `💵 *Recibido:* ${formatearDinero(pedido.montoRecibido)}\n`;
+    texto += `🪙 *Cambio / Vuelto:* ${formatearDinero(pedido.cambio || 0)}\n`;
+  }
+  texto += `--------------------------------\n`;
+  texto += `_¡Muchas gracias por su preferencia!_ 🍗🐟🍲`;
+
+  return texto;
+};
+
+/**
+ * Comparte el comprobante ya sea como archivo PDF nativo o vía WhatsApp
+ */
+export const compartirTicket = async (pedido) => {
+  try {
+    const pdf = crearDocumentoPDFTicket(pedido);
+    
+    // Si el navegador soporta compartir archivos nativos (móviles Android/iOS)
+    if (navigator.canShare && pdf) {
+      try {
+        const pdfBlob = pdf.output('blob');
+        const ordenNum = pedido?.numeroOrden || 'POS';
+        const file = new File([pdfBlob], `Comprobante_ElGaraje_Orden_${ordenNum}.pdf`, { type: 'application/pdf' });
+
+        if (navigator.canShare({ files: [file] })) {
+          await navigator.share({
+            title: `Comprobante Orden #${ordenNum} - El Garaje`,
+            text: `Comprobante de consumo en El Garaje Calacaleño - Total: ${formatearDinero(pedido.total)}`,
+            files: [file],
+          });
+          return true;
+        }
+      } catch (shareErr) {
+        console.log('Error o cancelación de compartir archivo nativo, usando WhatsApp/descarga:', shareErr);
+      }
+    }
+
+    // Fallback: Abrir WhatsApp con el comprobante detallado
+    const textoMensaje = encodeURIComponent(generarTextoTicketWhatsApp(pedido));
+    const urlWhatsApp = `https://api.whatsapp.com/send?text=${textoMensaje}`;
+    window.open(urlWhatsApp, '_blank');
+    return true;
+  } catch (error) {
+    console.error('Error al compartir comprobante:', error);
+    return false;
+  }
+};
+

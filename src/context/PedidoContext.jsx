@@ -34,6 +34,7 @@ const STORAGE_MESAS = 'el_garaje_mesas_v1';
 const STORAGE_PEDIDOS = 'el_garaje_pedidos_v1';
 const STORAGE_CIERRES = 'el_garaje_cierres_v1';
 const STORAGE_NUMERO_ORDEN = 'el_garaje_consecutivo_orden_v1';
+const STORAGE_DIA = 'el_garaje_dia_seleccionado_v1';
 
 // Estado inicial de las 7 mesas + A Domicilio (todas vacías y listas)
 const MESAS_INICIALES = [
@@ -44,11 +45,11 @@ const MESAS_INICIALES = [
   { id: 5, numero: 5, tipo: 'mesa', nombre: 'Mesa 5', estado: 'libre', pedidoActual: null },
   { id: 6, numero: 6, tipo: 'mesa', nombre: 'Mesa 6', estado: 'libre', pedidoActual: null },
   { id: 7, numero: 7, tipo: 'mesa', nombre: 'Mesa 7', estado: 'libre', pedidoActual: null },
-  { id: 'domicilio', numero: 'Domicilio', tipo: 'domicilio', nombre: 'A Domicilio', estado: 'libre', pedidoActual: null },
+  { id: 'domicilio_1', numero: 'Domicilio 1', tipo: 'domicilio', nombre: 'A Domicilio #1', estado: 'libre', pedidoActual: null },
 ];
 
 export const PedidoProvider = ({ children }) => {
-  // Estado de las 7 mesas + A Domicilio (inician vacías por defecto)
+  // Estado dinámico de mesas y pedidos a domicilio
   const [mesas, setMesas] = useState(() => {
     try {
       const guardadas = localStorage.getItem(STORAGE_MESAS);
@@ -56,16 +57,12 @@ export const PedidoProvider = ({ children }) => {
       const parsed = JSON.parse(guardadas);
       if (!Array.isArray(parsed) || parsed.length === 0) return MESAS_INICIALES;
 
-      // Garantizar que mesas sin productos reales o drafts antiguos comiencen como 'libre'
-      return MESAS_INICIALES.map((mesaInit) => {
-        const encontrada = parsed.find(
-          (m) => String(m.numero) === String(mesaInit.numero) || m.id === mesaInit.id
-        );
-        // Si no existe o no tiene productos válidos en pedido, iniciar libre
-        if (!encontrada || !encontrada.pedidoActual || !encontrada.pedidoActual.productos || encontrada.pedidoActual.productos.length === 0) {
-          return { ...mesaInit, estado: 'libre', pedidoActual: null };
+      return parsed.map((m) => {
+        // Si no tiene productos válidos en pedido, iniciar libre
+        if (!m.pedidoActual || !m.pedidoActual.productos || m.pedidoActual.productos.length === 0) {
+          return { ...m, estado: 'libre', pedidoActual: null };
         }
-        return { ...mesaInit, ...encontrada };
+        return m;
       });
     } catch {
       return MESAS_INICIALES;
@@ -104,6 +101,29 @@ export const PedidoProvider = ({ children }) => {
 
   // Modales y control de UI
   const [mesaSeleccionada, setMesaSeleccionada] = useState(null);
+  const [diaSeleccionado, setDiaSeleccionadoState] = useState(() => {
+    try {
+      const guardado = localStorage.getItem(STORAGE_DIA);
+      if (guardado) return guardado;
+      const diaNum = new Date().getDay(); // 0 = Domingo, 5 = Viernes, 6 = Sábado
+      if (diaNum === 5) return 'viernes';
+      if (diaNum === 6) return 'sabado';
+      if (diaNum === 0) return 'domingo';
+      return 'viernes';
+    } catch {
+      return 'viernes';
+    }
+  });
+
+  const setDiaSeleccionado = useCallback((dia) => {
+    setDiaSeleccionadoState(dia);
+    try {
+      localStorage.setItem(STORAGE_DIA, dia);
+    } catch (e) {
+      console.error('Error saving dia', e);
+    }
+  }, []);
+
   const [isPedidoModalOpen, setIsPedidoModalOpen] = useState(false);
   const [isCobroModalOpen, setIsCobroModalOpen] = useState(false);
   const [isTicketModalOpen, setIsTicketModalOpen] = useState(false);
@@ -471,6 +491,88 @@ export const PedidoProvider = ({ children }) => {
     setMesaSeleccionada(null);
   };
 
+  // Agregar una nueva mesa dinámica
+  const agregarMesa = (nombrePersonalizado = '') => {
+    const numeros = mesas
+      .filter((m) => m.tipo === 'mesa' && typeof m.numero === 'number')
+      .map((m) => m.numero);
+    const siguiente = numeros.length > 0 ? Math.max(...numeros) + 1 : 1;
+    const nombre = nombrePersonalizado && nombrePersonalizado.trim() !== '' 
+      ? nombrePersonalizado.trim() 
+      : `Mesa ${siguiente}`;
+
+    const nuevaMesa = {
+      id: `mesa_${Date.now()}_${siguiente}`,
+      numero: siguiente,
+      tipo: 'mesa',
+      nombre,
+      estado: 'libre',
+      pedidoActual: null,
+    };
+
+    setMesas((prev) => [...prev, nuevaMesa]);
+    mostrarNotificacion(`${nombre} agregada con éxito`, 'success');
+    return nuevaMesa;
+  };
+
+  // Agregar un nuevo pedido a domicilio y abrir comanda directamente
+  const agregarDomicilio = (nombreCliente = '', telefonoOReferencia = '') => {
+    const domiciliosExistentes = mesas.filter((m) => m.tipo === 'domicilio');
+    const conteo = domiciliosExistentes.length + 1;
+    const identificador = `Dom #${conteo}`;
+    const idUnico = `dom_${Date.now()}`;
+    const nuevoNumOrden = ultimoNumeroOrden + 1;
+
+    const nombre = nombreCliente && nombreCliente.trim() !== ''
+      ? `A Domicilio (${nombreCliente.trim()})`
+      : `A Domicilio #${conteo}`;
+
+    const notaInicial = [
+      nombreCliente ? `Cliente: ${nombreCliente.trim()}` : '',
+      telefonoOReferencia ? `Ref/Tel: ${telefonoOReferencia.trim()}` : ''
+    ].filter(Boolean).join(' | ');
+
+    const nuevoPedido = {
+      id: `ped_${Date.now()}_dom_${conteo}`,
+      numeroOrden: nuevoNumOrden,
+      mesa: identificador,
+      fecha: new Date().toISOString(),
+      productos: [],
+      total: 0,
+      notas: notaInicial,
+      estado: 'activo',
+    };
+
+    const nuevoDomicilio = {
+      id: idUnico,
+      numero: identificador,
+      tipo: 'domicilio',
+      nombre,
+      estado: 'ocupada',
+      pedidoActual: nuevoPedido,
+    };
+
+    setUltimoNumeroOrden(nuevoNumOrden);
+    setMesas((prev) => [...prev, nuevoDomicilio]);
+    setMesaSeleccionada(identificador);
+    setIsPedidoModalOpen(true);
+    mostrarNotificacion(`Pedido ${nombre} creado. Añade los platos del comensal`, 'success');
+    return nuevoDomicilio;
+  };
+
+  // Eliminar una mesa o cuadro de domicilio
+  const eliminarMesa = (idONumero) => {
+    setMesas((prev) =>
+      prev.filter((m) => m.id !== idONumero && m.numero !== idONumero)
+    );
+    if (mesaSeleccionada === idONumero) {
+      setIsPedidoModalOpen(false);
+      setIsCobroModalOpen(false);
+      setMesaSeleccionada(null);
+    }
+    mostrarNotificacion('Mesa o domicilio eliminado del panel', 'info');
+  };
+
   // Liberar todas las mesas activas de una sola vez
   const liberarTodasLasMesas = () => {
     setMesas(MESAS_INICIALES);
@@ -556,13 +658,22 @@ export const PedidoProvider = ({ children }) => {
     // 3. Guardar en estado local
     setPedidosHistorial((prev) => [pedidoPagado, ...prev]);
 
-    // 4. Liberar la mesa
+    // 4. Liberar la mesa o eliminar el cuadro si es a domicilio
     setMesas((prev) =>
-      prev.map((m) =>
-        m.numero === mesaSeleccionada
-          ? { ...m, estado: 'libre', pedidoActual: null }
-          : m
-      )
+      prev
+        .filter((m) => {
+          const esEstaMesa = m.numero === mesaSeleccionada || m.id === mesaSeleccionada;
+          // Si es domicilio y fue cobrado, se quita el cuadro del salón
+          if (esEstaMesa && m.tipo === 'domicilio') {
+            return false;
+          }
+          return true;
+        })
+        .map((m) =>
+          m.numero === mesaSeleccionada || m.id === mesaSeleccionada
+            ? { ...m, estado: 'libre', pedidoActual: null }
+            : m
+        )
     );
 
     // 5. Lanzar confeti de éxito
@@ -714,6 +825,8 @@ export const PedidoProvider = ({ children }) => {
         isFirebaseConnected,
         sincronizando,
         notificacion,
+        diaSeleccionado,
+        setDiaSeleccionado,
         supabaseProjectName: SUPABASE_PROJECT_NAME,
         supabaseProjectId: SUPABASE_PROJECT_ID,
         supabaseUrl: SUPABASE_URL,
@@ -732,6 +845,9 @@ export const PedidoProvider = ({ children }) => {
         actualizarPrecioItem,
         actualizarNotasPedido,
         cerrarModalPedido,
+        agregarMesa,
+        agregarDomicilio,
+        eliminarMesa,
         liberarTodasLasMesas,
         cancelarPedidoMesa,
         confirmarCobro,

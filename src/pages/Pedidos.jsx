@@ -322,7 +322,16 @@ export default function Pedidos() {
                           type="button"
                           onClick={() => handleVerTicket(pedido)}
                           className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-amber-400 hover:text-amber-300 border border-slate-700 transition-colors"
-                          title="Ver e Imprimir Ticket"
+                          title="Ver, Imprimir y Compartir Ticket"
+                        >
+                          <Receipt className="w-4 h-4" />
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleVerTicket(pedido)}
+                          className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 transition-colors"
+                          title="Imprimir Comprobante"
                         >
                           <Printer className="w-4 h-4" />
                         </button>

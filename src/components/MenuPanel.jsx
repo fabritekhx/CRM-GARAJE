@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
   Search, 
   Fish, 
@@ -9,16 +9,29 @@ import {
   Check, 
   X,
   Layers,
-  Citrus
+  Citrus,
+  Flame,
+  Soup,
+  Calendar
 } from 'lucide-react';
-import { CATEGORIAS, MENU } from '../data/menu';
+import { CATEGORIAS, MENU, DIAS_ATENCION } from '../data/menu';
 import { usePedidos } from '../context/PedidoContext';
 import { formatearDinero } from '../utils/helpers';
 
 export default function MenuPanel() {
-  const { agregarProductoAPedido, mesaSeleccionada } = usePedidos();
+  const { 
+    agregarProductoAPedido, 
+    mesaSeleccionada, 
+    diaSeleccionado, 
+    setDiaSeleccionado 
+  } = usePedidos();
   
-  const [categoriaActiva, setCategoriaActiva] = useState('pescados');
+  const [categoriaActiva, setCategoriaActiva] = useState(() => {
+    if (diaSeleccionado === 'sabado') return 'sabados';
+    if (diaSeleccionado === 'domingo') return 'domingos';
+    return 'pescados';
+  });
+
   const [busqueda, setBusqueda] = useState('');
   
   // Estado para el modal de selección de producto / variantes
@@ -31,7 +44,28 @@ export default function MenuPanel() {
   const [esOtroValor, setEsOtroValor] = useState(false);
   const [valorPersonalizadoInput, setValorPersonalizadoInput] = useState('');
 
-  // Filtrado de productos por categoría y búsqueda
+  // Cuando cambia el día seleccionado globalmente, ajustar la categoría activa
+  useEffect(() => {
+    if (diaSeleccionado === 'sabado') {
+      setCategoriaActiva('sabados');
+    } else if (diaSeleccionado === 'domingo') {
+      setCategoriaActiva('domingos');
+    } else if (diaSeleccionado === 'viernes') {
+      setCategoriaActiva('pescados');
+    }
+  }, [diaSeleccionado]);
+
+  // Filtrar categorías visibles según el día seleccionado
+  const categoriasVisibles = useMemo(() => {
+    if (diaSeleccionado === 'todos') {
+      return CATEGORIAS;
+    }
+    return CATEGORIAS.filter(
+      (cat) => cat.dia === 'todos' || cat.dia === diaSeleccionado
+    );
+  }, [diaSeleccionado]);
+
+  // Filtrado de productos por categoría, día y búsqueda
   const productosFiltrados = useMemo(() => {
     return MENU.filter((item) => {
       const coincideBusqueda = 
@@ -71,7 +105,7 @@ export default function MenuPanel() {
         setNotasVariante('');
       }
     } else {
-      // Otras secciones sin variantes (Cervezas, Porciones, etc.): Se agregan directamente con 1 click
+      // Platos principales y porciones directas (Fritadas, Caldos, Encebollados, Corvina, Camarón, Combos, etc.)
       agregarProductoAPedido(prod, null, prod.precioBase);
     }
   };
@@ -105,6 +139,8 @@ export default function MenuPanel() {
   const getCategoriaIcon = (id) => {
     switch (id) {
       case 'pescados': return <Fish className="w-4 h-4" />;
+      case 'sabados': return <Flame className="w-4 h-4" />;
+      case 'domingos': return <Soup className="w-4 h-4" />;
       case 'jugos': return <Citrus className="w-4 h-4" />;
       case 'gaseosas': return <CupSoda className="w-4 h-4" />;
       case 'cervezas': return <Beer className="w-4 h-4" />;
@@ -116,9 +152,42 @@ export default function MenuPanel() {
   return (
     <div className="flex flex-col h-full bg-slate-900/50 rounded-2xl border border-slate-800 overflow-hidden">
       
-      {/* Barra superior: Buscador y Categorías */}
-      <div className="p-3.5 sm:p-4 border-b border-slate-800 bg-slate-900/80 space-y-3">
+      {/* Barra superior: Selector de Día, Buscador y Categorías */}
+      <div className="p-3.5 sm:p-4 border-b border-slate-800 bg-slate-900/90 space-y-3">
         
+        {/* Selector de Día de Atención */}
+        <div className="flex items-center justify-between gap-2 pb-1 border-b border-slate-800/80">
+          <div className="flex items-center gap-1.5 text-xs font-bold text-slate-300">
+            <Calendar className="w-3.5 h-3.5 text-amber-400" />
+            <span className="hidden sm:inline">Día:</span>
+          </div>
+
+          <div className="flex items-center gap-1 overflow-x-auto scrollbar-none">
+            {DIAS_ATENCION.map((d) => {
+              const esActivo = diaSeleccionado === d.id;
+              return (
+                <button
+                  key={d.id}
+                  type="button"
+                  onClick={() => {
+                    setDiaSeleccionado(d.id);
+                    if (d.categoriaPrincipal) {
+                      setCategoriaActiva(d.categoriaPrincipal);
+                    }
+                  }}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all whitespace-nowrap border ${
+                    esActivo
+                      ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-sm'
+                      : 'bg-slate-800/80 text-slate-400 border-slate-700 hover:text-white hover:bg-slate-800'
+                  }`}
+                >
+                  {d.corto}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
         {/* Buscador Rápido */}
         <div className="relative">
           <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
@@ -126,7 +195,7 @@ export default function MenuPanel() {
             type="text"
             value={busqueda}
             onChange={(e) => setBusqueda(e.target.value)}
-            placeholder="Buscar en el menú (ej. Tilapia, Jugo, Coca Cola)..."
+            placeholder="Buscar en el menú (ej. Fritada, Encebollado, Tilapia, Jugo)..."
             className="w-full pl-10 pr-8 py-2 bg-slate-800/80 border border-slate-700 rounded-xl text-xs sm:text-sm text-white placeholder-slate-400 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-all"
           />
           {busqueda && (
@@ -139,9 +208,9 @@ export default function MenuPanel() {
           )}
         </div>
 
-        {/* Pestañas de Categoría */}
+        {/* Pestañas de Categoría según el Día */}
         <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
-          {CATEGORIAS.map((cat) => {
+          {categoriasVisibles.map((cat) => {
             const esActiva = categoriaActiva === cat.id && !busqueda;
             return (
               <button
@@ -224,7 +293,7 @@ export default function MenuPanel() {
         )}
       </div>
 
-      {/* MODAL DE SELECCIÓN DE PRODUCTO */}
+      {/* MODAL DE SELECCIÓN DE PRODUCTO / VARIANTES */}
       {productoParaVariante && (
         <div className="fixed inset-0 z-60 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="w-full max-w-md bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl p-5 space-y-4 max-h-[90vh] overflow-y-auto">
