@@ -5,20 +5,13 @@ import {
   Receipt, 
   Calculator, 
   BarChart3, 
-  Database, 
-  Clock, 
-  RefreshCw
+  Clock
 } from 'lucide-react';
 import { usePedidos } from '../context/PedidoContext';
 
 export default function Navbar() {
   const { 
-    isSupabaseConnected, 
-    sincronizando, 
-    sincronizarConSupabase, 
-    setIsDatabaseModalOpen,
-    mesas,
-    supabaseProjectName
+    mesas
   } = usePedidos();
 
   const [horaActual, setHoraActual] = useState(new Date());
@@ -124,39 +117,12 @@ export default function Navbar() {
           <div className="flex items-center gap-2 sm:gap-3">
             
             {/* Reloj POS */}
-            <div className="hidden lg:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-800/60 border border-slate-700/60 text-slate-300 text-xs font-mono">
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-800/60 border border-slate-700/60 text-slate-300 text-xs font-mono">
               <Clock className="w-3.5 h-3.5 text-amber-400" />
               <span>
                 {horaActual.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
               </span>
             </div>
-
-            {/* Estado de Supabase */}
-            <button
-              onClick={() => setIsDatabaseModalOpen(true)}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all ${
-                isSupabaseConnected
-                  ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20'
-                  : 'bg-amber-500/10 text-amber-400 border-amber-500/30 hover:bg-amber-500/20'
-              }`}
-              title="Click para ver estado de base de datos Supabase"
-            >
-              <Database className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">
-                {isSupabaseConnected ? 'Supabase Conectado' : 'Modo Offline'}
-              </span>
-              <span className={`w-2 h-2 rounded-full ${isSupabaseConnected ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
-            </button>
-
-            {/* Botón de Sincronización Manual */}
-            <button
-              onClick={() => sincronizarConSupabase(true)}
-              disabled={sincronizando}
-              className="p-2 rounded-xl bg-slate-800 text-slate-300 hover:text-white hover:bg-slate-700 border border-slate-700 transition-all disabled:opacity-50"
-              title="Sincronizar con Supabase"
-            >
-              <RefreshCw className={`w-4 h-4 ${sincronizando ? 'animate-spin text-amber-400' : ''}`} />
-            </button>
 
           </div>
         </div>
