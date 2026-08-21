@@ -35,7 +35,7 @@ const STORAGE_PEDIDOS = 'el_garaje_pedidos_v1';
 const STORAGE_CIERRES = 'el_garaje_cierres_v1';
 const STORAGE_NUMERO_ORDEN = 'el_garaje_consecutivo_orden_v1';
 
-// Estado inicial de las 7 mesas + A Domicilio
+// Estado inicial de las 7 mesas + A Domicilio (todas vacías y listas)
 const MESAS_INICIALES = [
   { id: 1, numero: 1, tipo: 'mesa', nombre: 'Mesa 1', estado: 'libre', pedidoActual: null },
   { id: 2, numero: 2, tipo: 'mesa', nombre: 'Mesa 2', estado: 'libre', pedidoActual: null },
@@ -48,7 +48,7 @@ const MESAS_INICIALES = [
 ];
 
 export const PedidoProvider = ({ children }) => {
-  // Estado de las 7 mesas + A Domicilio
+  // Estado de las 7 mesas + A Domicilio (inician vacías por defecto)
   const [mesas, setMesas] = useState(() => {
     try {
       const guardadas = localStorage.getItem(STORAGE_MESAS);
@@ -56,12 +56,16 @@ export const PedidoProvider = ({ children }) => {
       const parsed = JSON.parse(guardadas);
       if (!Array.isArray(parsed) || parsed.length === 0) return MESAS_INICIALES;
 
-      // Combinar con MESAS_INICIALES para garantizar que Mesa 6, 7 y Domicilio siempre estén presentes
+      // Garantizar que mesas sin productos reales o drafts antiguos comiencen como 'libre'
       return MESAS_INICIALES.map((mesaInit) => {
         const encontrada = parsed.find(
           (m) => String(m.numero) === String(mesaInit.numero) || m.id === mesaInit.id
         );
-        return encontrada ? { ...mesaInit, ...encontrada } : mesaInit;
+        // Si no existe o no tiene productos válidos en pedido, iniciar libre
+        if (!encontrada || !encontrada.pedidoActual || !encontrada.pedidoActual.productos || encontrada.pedidoActual.productos.length === 0) {
+          return { ...mesaInit, estado: 'libre', pedidoActual: null };
+        }
+        return { ...mesaInit, ...encontrada };
       });
     } catch {
       return MESAS_INICIALES;
@@ -449,6 +453,34 @@ export const PedidoProvider = ({ children }) => {
     );
   };
 
+  // Cerrar modal de pedido y liberar mesa automáticamente si no tiene ítems
+  const cerrarModalPedido = () => {
+    if (mesaSeleccionada) {
+      setMesas((prev) =>
+        prev.map((m) => {
+          if (m.numero === mesaSeleccionada) {
+            if (!m.pedidoActual?.productos || m.pedidoActual.productos.length === 0) {
+              return { ...m, estado: 'libre', pedidoActual: null };
+            }
+          }
+          return m;
+        })
+      );
+    }
+    setIsPedidoModalOpen(false);
+    setMesaSeleccionada(null);
+  };
+
+  // Liberar todas las mesas activas de una sola vez
+  const liberarTodasLasMesas = () => {
+    setMesas(MESAS_INICIALES);
+    localStorage.setItem(STORAGE_MESAS, JSON.stringify(MESAS_INICIALES));
+    setIsPedidoModalOpen(false);
+    setIsCobroModalOpen(false);
+    setMesaSeleccionada(null);
+    mostrarNotificacion('Todas las mesas han sido liberadas y están vacías', 'info');
+  };
+
   // Cancelar/Vaciar pedido de una mesa
   const cancelarPedidoMesa = (numeroMesa) => {
     setMesas((prev) =>
@@ -699,6 +731,8 @@ export const PedidoProvider = ({ children }) => {
         actualizarNotasItem,
         actualizarPrecioItem,
         actualizarNotasPedido,
+        cerrarModalPedido,
+        liberarTodasLasMesas,
         cancelarPedidoMesa,
         confirmarCobro,
         realizarCierreCaja,

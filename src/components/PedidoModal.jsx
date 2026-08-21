@@ -34,6 +34,7 @@ export default function PedidoModal() {
     actualizarPrecioItem,
     actualizarNotasPedido,
     cancelarPedidoMesa,
+    cerrarModalPedido,
     mostrarNotificacion
   } = usePedidos();
 
@@ -126,7 +127,7 @@ export default function PedidoModal() {
 
           {/* Botón Cerrar Modal */}
           <button
-            onClick={() => setIsPedidoModalOpen(false)}
+            onClick={cerrarModalPedido}
             className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
             title="Guardar y volver a mesas"
           >
