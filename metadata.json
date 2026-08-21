@@ -1,0 +1,6 @@
+{
+  "name": "El Garaje POS - Sistema de Punto de Venta",
+  "description": "Sistema de Punto de Venta (POS) para restaurante El Garaje con gestión de mesas, pedidos, cierres de caja, análisis de ventas y sincronización con Firebase Firestore.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
