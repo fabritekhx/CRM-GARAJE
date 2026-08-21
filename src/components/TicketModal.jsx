@@ -5,11 +5,9 @@ import {
   Check, 
   Receipt, 
   Utensils, 
-  Sparkles,
   Trash2,
   AlertTriangle,
-  Layers,
-  Users
+  Bike
 } from 'lucide-react';
 import { usePedidos } from '../context/PedidoContext';
 import { formatearDinero, formatearFecha, imprimirTicket } from '../utils/helpers';
@@ -34,6 +32,8 @@ export default function TicketModal() {
     setMostrarConfirmacionEliminar(false);
     setIsTicketModalOpen(false);
   };
+
+  const esDomicilio = ticketPedido.mesa === 'Domicilio' || ticketPedido.mesa === 'A Domicilio';
 
   return (
     <div className="fixed inset-0 z-70 flex items-center justify-center p-3 sm:p-4 bg-slate-950/85 backdrop-blur-sm animate-in fade-in duration-200">
@@ -65,32 +65,36 @@ export default function TicketModal() {
             <div className="text-center space-y-1 pb-2 border-b border-dashed border-slate-300">
               <img 
                 src="https://eyzcuxspypnnwzzatnzs.supabase.co/storage/v1/object/public/Imagen/EL%20GARAJE.png" 
-                alt="El Garaje" 
+                alt="El Garaje Calacaleño" 
                 className="h-12 w-auto mx-auto object-contain filter grayscale contrast-125"
                 onError={(e) => { e.target.style.display = 'none'; }}
               />
-              <h2 className="font-black text-base tracking-tight text-slate-900">EL GARAJE</h2>
-              <p className="text-[10px] text-slate-600 font-sans">
-                Especialidad en Pescados y Mariscos
+              <h2 className="font-black text-base tracking-tight text-slate-900 uppercase">
+                EL GARAJE CALACALEÑO
+              </h2>
+              <p className="text-[10px] text-slate-700 font-sans font-semibold">
+                Comida tradicional del Ecuador
               </p>
-              <p className="text-[9px] text-slate-500 font-sans">
-                RUC: 1792837465001 • Calacalí, Ecuador
+              <p className="text-[9px] text-slate-600 font-sans">
+                RUC: 1710793256001 • Calacalí, Ecuador
               </p>
             </div>
 
-            {/* Metadatos de la Orden */}
-            <div className="text-[11px] space-y-0.5 pb-2 border-b border-dashed border-slate-300">
-              <div className="flex justify-between font-bold">
-                <span>ORDEN: #{ticketPedido.numeroOrden}</span>
-                <span>MESA: {ticketPedido.mesa}</span>
+            {/* Metadatos del Comprobante (Sin la parte de "ORDER") */}
+            <div className="text-[11px] space-y-1 pb-2 border-b border-dashed border-slate-300">
+              <div className="flex justify-between items-center font-bold text-slate-950">
+                <span>ATENCIÓN:</span>
+                <span className="text-xs font-black bg-slate-100 px-2 py-0.5 rounded border border-slate-200 uppercase">
+                  {esDomicilio ? '🛵 A DOMICILIO' : `MESA ${ticketPedido.mesa}`}
+                </span>
               </div>
               <div className="flex justify-between text-[10px] text-slate-600">
                 <span>FECHA: {formatearFecha(ticketPedido.fecha, "dd/MM/yyyy")}</span>
                 <span>HORA: {formatearFecha(ticketPedido.fecha, "hh:mm a")}</span>
               </div>
               {ticketPedido.notas && (
-                <div className="text-[10px] text-slate-700 bg-slate-100 p-1 rounded mt-1 font-sans">
-                  <strong>Nota:</strong> {ticketPedido.notas}
+                <div className="text-[10px] text-slate-700 bg-slate-100 p-1.5 rounded mt-1 font-sans border border-slate-200">
+                  <strong>Nota / Dirección:</strong> {ticketPedido.notas}
                 </div>
               )}
             </div>
@@ -111,12 +115,12 @@ export default function TicketModal() {
                   <div className="col-span-7">
                     <span className="font-semibold text-slate-900">{item.nombre}</span>
                     {item.variante && (
-                      <span className="text-[10px] text-slate-500 block">
+                      <span className="text-[10px] text-slate-600 block">
                         ({item.variante})
                       </span>
                     )}
                     {item.notas && (
-                      <span className="text-[9px] text-slate-400 italic block">
+                      <span className="text-[9px] text-slate-500 italic block">
                         * {item.notas}
                       </span>
                     )}
@@ -130,17 +134,17 @@ export default function TicketModal() {
 
             {/* Totales y Formas de Pago */}
             <div className="py-2 border-b border-dashed border-slate-300 space-y-1.5 text-[11px]">
-              <div className="flex justify-between font-black text-sm text-slate-950 pt-1">
+              <div className="flex justify-between font-black text-base text-slate-950 pt-1">
                 <span>TOTAL:</span>
                 <span>{formatearDinero(ticketPedido.total)}</span>
               </div>
               
               {/* Formas de Pago Específicas */}
               <div className="flex justify-between text-[10px] text-slate-600 pt-1 border-t border-slate-200">
-                <span>MÉTODO:</span>
+                <span>MÉTODO DE PAGO:</span>
                 <span className="font-bold uppercase">
                   {ticketPedido.metodoPago === 'mixto' ? 'Pago Combinado (Mixto)' : 
-                   ticketPedido.metodoPago === 'dividido' ? 'Cuentas Separadas (Dividido)' : 
+                   ticketPedido.metodoPago === 'dividido' ? 'Cuentas Separadas' : 
                    ticketPedido.metodoPago || 'Efectivo'}
                 </span>
               </div>
@@ -223,10 +227,10 @@ export default function TicketModal() {
 
             {/* Pie del Ticket */}
             <div className="text-center pt-2 text-[10px] text-slate-500 space-y-1">
-              <p className="font-bold text-slate-700">¡GRACIAS POR SU COMPRA!</p>
-              <p>Esperamos verle pronto en El Garaje</p>
+              <p className="font-bold text-slate-800">¡GRACIAS POR SU PREFERENCIA!</p>
+              <p>Esperamos verle pronto en El Garaje Calacaleño</p>
               <p className="text-[8px] text-slate-400 font-mono">
-                Sistema El Garaje POS • Supabase Database
+                Sistema El Garaje Calacaleño POS
               </p>
             </div>
 
@@ -277,10 +281,10 @@ export default function TicketModal() {
             </div>
             <div>
               <h4 className="font-bold text-white text-base">
-                ¿Anular Orden #{ticketPedido.numeroOrden}?
+                ¿Anular este comprobante?
               </h4>
               <p className="text-xs text-slate-400 mt-1 leading-relaxed">
-                Este pedido será <strong>eliminado de la base de datos de Supabase</strong>, del historial de ventas y de los cierres de caja.
+                Este pedido será <strong>eliminado de la base de datos</strong>, del historial de ventas y de los cierres de caja.
               </p>
             </div>
             <div className="grid grid-cols-2 gap-2 pt-1">

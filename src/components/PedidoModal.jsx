@@ -13,7 +13,8 @@ import {
   ChevronLeft,
   MessageSquare,
   Sparkles,
-  ShoppingBag
+  ShoppingBag,
+  Bike
 } from 'lucide-react';
 import { usePedidos } from '../context/PedidoContext';
 import { formatearDinero, formatearHora } from '../utils/helpers';
@@ -81,12 +82,12 @@ export default function PedidoModal() {
           
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-amber-500 text-slate-950 font-black text-lg flex items-center justify-center shadow-md shadow-amber-500/20">
-              M{mesaSeleccionada}
+              {mesaSeleccionada === 'Domicilio' ? <Bike className="w-5 h-5" /> : `M${mesaSeleccionada}`}
             </div>
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="font-extrabold text-base sm:text-lg text-white">
-                  Mesa {mesaSeleccionada}
+                  {mesaSeleccionada === 'Domicilio' ? 'A Domicilio' : `Mesa ${mesaSeleccionada}`}
                 </h2>
                 <span className="px-2 py-0.5 rounded-full bg-amber-500/20 border border-amber-500/30 text-amber-400 text-xs font-mono font-bold">
                   Orden #{pedidoActual?.numeroOrden || '---'}

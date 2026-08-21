@@ -35,22 +35,34 @@ const STORAGE_PEDIDOS = 'el_garaje_pedidos_v1';
 const STORAGE_CIERRES = 'el_garaje_cierres_v1';
 const STORAGE_NUMERO_ORDEN = 'el_garaje_consecutivo_orden_v1';
 
-// Estado inicial de las 6 mesas
+// Estado inicial de las 7 mesas + A Domicilio
 const MESAS_INICIALES = [
-  { id: 1, numero: 1, estado: 'libre', pedidoActual: null },
-  { id: 2, numero: 2, estado: 'libre', pedidoActual: null },
-  { id: 3, numero: 3, estado: 'libre', pedidoActual: null },
-  { id: 4, numero: 4, estado: 'libre', pedidoActual: null },
-  { id: 5, numero: 5, estado: 'libre', pedidoActual: null },
-  { id: 6, numero: 6, estado: 'libre', pedidoActual: null },
+  { id: 1, numero: 1, tipo: 'mesa', nombre: 'Mesa 1', estado: 'libre', pedidoActual: null },
+  { id: 2, numero: 2, tipo: 'mesa', nombre: 'Mesa 2', estado: 'libre', pedidoActual: null },
+  { id: 3, numero: 3, tipo: 'mesa', nombre: 'Mesa 3', estado: 'libre', pedidoActual: null },
+  { id: 4, numero: 4, tipo: 'mesa', nombre: 'Mesa 4', estado: 'libre', pedidoActual: null },
+  { id: 5, numero: 5, tipo: 'mesa', nombre: 'Mesa 5', estado: 'libre', pedidoActual: null },
+  { id: 6, numero: 6, tipo: 'mesa', nombre: 'Mesa 6', estado: 'libre', pedidoActual: null },
+  { id: 7, numero: 7, tipo: 'mesa', nombre: 'Mesa 7', estado: 'libre', pedidoActual: null },
+  { id: 'domicilio', numero: 'Domicilio', tipo: 'domicilio', nombre: 'A Domicilio', estado: 'libre', pedidoActual: null },
 ];
 
 export const PedidoProvider = ({ children }) => {
-  // Estado de las 6 mesas
+  // Estado de las 7 mesas + A Domicilio
   const [mesas, setMesas] = useState(() => {
     try {
       const guardadas = localStorage.getItem(STORAGE_MESAS);
-      return guardadas ? JSON.parse(guardadas) : MESAS_INICIALES;
+      if (!guardadas) return MESAS_INICIALES;
+      const parsed = JSON.parse(guardadas);
+      if (!Array.isArray(parsed) || parsed.length === 0) return MESAS_INICIALES;
+
+      // Combinar con MESAS_INICIALES para garantizar que Mesa 6, 7 y Domicilio siempre estén presentes
+      return MESAS_INICIALES.map((mesaInit) => {
+        const encontrada = parsed.find(
+          (m) => String(m.numero) === String(mesaInit.numero) || m.id === mesaInit.id
+        );
+        return encontrada ? { ...mesaInit, ...encontrada } : mesaInit;
+      });
     } catch {
       return MESAS_INICIALES;
     }

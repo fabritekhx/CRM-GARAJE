@@ -45,7 +45,7 @@ export default function Mesas() {
           <div>
             <span className="text-xs font-semibold text-slate-400">Mesas Activas</span>
             <div className="text-2xl sm:text-3xl font-black text-white mt-1">
-              {mesasOcupadas.length} <span className="text-sm font-normal text-slate-500">/ 6</span>
+              {mesasOcupadas.length} <span className="text-sm font-normal text-slate-500">/ {mesas.length}</span>
             </div>
           </div>
           <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 flex items-center justify-center">
@@ -98,9 +98,9 @@ export default function Mesas() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl sm:text-2xl font-extrabold text-white tracking-tight flex items-center gap-2">
-            <span>Salón de Mesas</span>
+            <span>Salón y Domicilios</span>
             <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-slate-800 border border-slate-700 text-slate-300">
-              6 Mesas
+              7 Mesas + A Domicilio
             </span>
           </h1>
           <p className="text-xs sm:text-sm text-slate-400">

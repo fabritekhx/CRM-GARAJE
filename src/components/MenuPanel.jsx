@@ -51,19 +51,19 @@ export default function MenuPanel() {
     if (!mesaSeleccionada) return;
 
     if (prod.tipoVariante === 'tamano_pescado') {
-      // Pescados: Abre modal con Pequeño, Mediano, Grande y la opción de "Otro valor"
+      // Pescados: Abre modal con los valores $4.00, $5.00, $6.00 y la opción de "Otro valor"
       setProductoParaVariante(prod);
-      setVarianteSeleccionada(prod.tamanos[1].nombre); // Default Mediano
+      setVarianteSeleccionada(formatearDinero(prod.tamanos[1].precio)); // Default $5.00
       setPrecioSeleccionado(prod.tamanos[1].precio);
       setValorPersonalizadoInput(prod.tamanos[1].precio.toString());
       setEsOtroValor(false);
       setNotasVariante('');
     } else if (prod.tipoVariante === 'sabor' && prod.sabores?.length > 0) {
       if (prod.sabores.length === 1) {
-        // Un solo sabor (ej. Coca Cola Familiar) se agrega directamente como antes
+        // Un solo sabor se agrega directamente
         agregarProductoAPedido(prod, prod.sabores[0], prod.precioBase);
       } else {
-        // Múltiples sabores (Jugos, Gaseosas con variedad): modal simple para elegir sabor
+        // Múltiples sabores: modal para elegir sabor
         setProductoParaVariante(prod);
         setVarianteSeleccionada(prod.sabores[0]);
         setPrecioSeleccionado(prod.precioBase);
@@ -71,7 +71,7 @@ export default function MenuPanel() {
         setNotasVariante('');
       }
     } else {
-      // Otras secciones sin variantes (Cervezas, Porciones, etc.): Se agregan directamente con 1 click como antes
+      // Otras secciones sin variantes (Cervezas, Porciones, etc.): Se agregan directamente con 1 click
       agregarProductoAPedido(prod, null, prod.precioBase);
     }
   };
@@ -87,9 +87,7 @@ export default function MenuPanel() {
     if (productoParaVariante.categoria === 'pescados' && esOtroValor) {
       const precioNumerico = parseFloat(valorPersonalizadoInput);
       precioFinal = !isNaN(precioNumerico) && precioNumerico >= 0 ? precioNumerico : (precioSeleccionado || 0);
-      if (!varianteFinal || varianteFinal === 'Otro valor' || varianteFinal === 'Personalizado') {
-        varianteFinal = `Personalizado $${precioFinal.toFixed(2)}`;
-      }
+      varianteFinal = `Valor: $${precioFinal.toFixed(2)}`;
     }
 
     agregarProductoAPedido(
@@ -235,7 +233,7 @@ export default function MenuPanel() {
             <div className="flex items-start justify-between border-b border-slate-800 pb-3">
               <div>
                 <span className="text-[11px] uppercase font-bold tracking-wider text-amber-400">
-                  {productoParaVariante.categoria === 'pescados' ? 'Seleccionar Tamaño o Valor' : 'Seleccionar Sabor'}
+                  {productoParaVariante.categoria === 'pescados' ? 'Seleccionar Valor' : 'Seleccionar Sabor'}
                 </span>
                 <h3 className="text-base sm:text-lg font-bold text-white">
                   {productoParaVariante.nombre}
@@ -252,33 +250,32 @@ export default function MenuPanel() {
               </button>
             </div>
 
-            {/* SECCIÓN PESCADOS: TAMAÑOS ESTÁNDAR + BOTÓN "OTRO VALOR" */}
+            {/* SECCIÓN PESCADOS: SOLO LOS VALORES DEL PRECIO ($4.00, $5.00, $6.00) + OTRO VALOR */}
             {productoParaVariante.tipoVariante === 'tamano_pescado' && (
               <div className="space-y-3">
                 <label className="text-xs font-semibold text-slate-300">
-                  Elige el tamaño o valor del pescado:
+                  Elige el valor del pescado:
                 </label>
 
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                   {productoParaVariante.tamanos.map((tam) => {
-                    const seleccionado = !esOtroValor && precioSeleccionado === tam.precio && varianteSeleccionada === tam.nombre;
+                    const seleccionado = !esOtroValor && precioSeleccionado === tam.precio;
                     return (
                       <button
                         key={tam.id}
                         type="button"
                         onClick={() => {
                           setEsOtroValor(false);
-                          setVarianteSeleccionada(tam.nombre);
+                          setVarianteSeleccionada(formatearDinero(tam.precio));
                           setPrecioSeleccionado(tam.precio);
                         }}
-                        className={`p-2.5 rounded-xl border flex flex-col items-center justify-center transition-all ${
+                        className={`py-3.5 px-2 rounded-xl border flex flex-col items-center justify-center transition-all ${
                           seleccionado
                             ? 'bg-amber-500 text-slate-950 border-amber-400 font-bold shadow-md shadow-amber-500/20'
-                            : 'bg-slate-800 text-slate-300 border-slate-700 hover:border-slate-600'
+                            : 'bg-slate-800 text-slate-200 border-slate-700 hover:border-slate-600 hover:bg-slate-750'
                         }`}
                       >
-                        <span className="text-xs">{tam.nombre}</span>
-                        <span className="text-sm font-extrabold font-mono mt-0.5">
+                        <span className="text-base sm:text-lg font-black font-mono">
                           {formatearDinero(tam.precio)}
                         </span>
                       </button>
@@ -295,13 +292,13 @@ export default function MenuPanel() {
                         setValorPersonalizadoInput('5.00');
                       }
                     }}
-                    className={`p-2.5 rounded-xl border flex flex-col items-center justify-center transition-all ${
+                    className={`py-3.5 px-2 rounded-xl border flex flex-col items-center justify-center transition-all ${
                       esOtroValor
                         ? 'bg-amber-500 text-slate-950 border-amber-400 font-bold shadow-md shadow-amber-500/20'
                         : 'bg-slate-800/80 text-amber-400 border-amber-500/40 hover:bg-slate-800 hover:border-amber-500'
                     }`}
                   >
-                    <span className="text-xs">Otro valor</span>
+                    <span className="text-xs font-bold leading-tight">Otro valor</span>
                     <span className="text-sm font-extrabold font-mono mt-0.5">
                       {esOtroValor && valorPersonalizadoInput ? `$${parseFloat(valorPersonalizadoInput || 0).toFixed(2)}` : '$$$'}
                     </span>
@@ -354,7 +351,7 @@ export default function MenuPanel() {
               </div>
             )}
 
-            {/* SECCIÓN JUGOS Y GASEOSAS: SELECCIÓN SIMPLE DE SABOR (COMO ESTABA ANTES) */}
+            {/* SECCIÓN JUGOS Y GASEOSAS: SELECCIÓN SIMPLE DE SABOR */}
             {productoParaVariante.tipoVariante === 'sabor' && productoParaVariante.sabores?.length > 0 && (
               <div className="space-y-2">
                 <label className="text-xs font-semibold text-slate-300">

@@ -1,14 +1,12 @@
 import React from 'react';
 import { 
   Users, 
-  Utensils, 
   DollarSign, 
   Plus, 
   Clock, 
-  CheckCircle2, 
   AlertCircle,
   ChevronRight,
-  Sparkles
+  Bike
 } from 'lucide-react';
 import { usePedidos } from '../context/PedidoContext';
 import { formatearDinero, formatearHora } from '../utils/helpers';
@@ -20,6 +18,7 @@ export default function MesaCard({ mesa }) {
   const pedido = mesa.pedidoActual;
   const cantidadItems = pedido?.productos?.reduce((acc, item) => acc + (item.cantidad || 0), 0) || 0;
   const total = pedido?.total || 0;
+  const esDomicilio = mesa.numero === 'Domicilio' || mesa.tipo === 'domicilio';
 
   const handleCobroRapido = (e) => {
     e.stopPropagation();
@@ -34,7 +33,9 @@ export default function MesaCard({ mesa }) {
       className={`group relative overflow-hidden rounded-2xl border transition-all duration-300 cursor-pointer select-none flex flex-col justify-between ${
         estaOcupada
           ? 'bg-gradient-to-b from-slate-900 via-slate-900 to-amber-950/30 border-amber-500/50 shadow-xl shadow-amber-950/20 hover:border-amber-400 hover:shadow-amber-500/10'
-          : 'bg-gradient-to-b from-slate-900 via-slate-900/90 to-slate-900/60 border-slate-800/80 hover:border-emerald-500/40 hover:bg-slate-850 hover:shadow-lg'
+          : esDomicilio 
+            ? 'bg-gradient-to-b from-slate-900 via-slate-900/90 to-cyan-950/20 border-cyan-500/40 hover:border-cyan-400 hover:bg-slate-850 hover:shadow-lg'
+            : 'bg-gradient-to-b from-slate-900 via-slate-900/90 to-slate-900/60 border-slate-800/80 hover:border-emerald-500/40 hover:bg-slate-850 hover:shadow-lg'
       }`}
     >
       {/* Indicador de estado superior */}
@@ -45,18 +46,29 @@ export default function MesaCard({ mesa }) {
               className={`w-12 h-12 rounded-xl flex items-center justify-center font-black text-xl tracking-tight transition-transform group-hover:scale-105 ${
                 estaOcupada
                   ? 'bg-amber-500 text-slate-950 shadow-lg shadow-amber-500/30'
-                  : 'bg-slate-800 text-slate-300 border border-slate-700'
+                  : esDomicilio
+                    ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/40'
+                    : 'bg-slate-800 text-slate-300 border border-slate-700'
               }`}
             >
-              M{mesa.numero}
+              {esDomicilio ? <Bike className="w-6 h-6" /> : `M${mesa.numero}`}
             </div>
             <div>
               <h3 className="font-bold text-lg text-white group-hover:text-amber-400 transition-colors">
-                Mesa {mesa.numero}
+                {esDomicilio ? 'A Domicilio' : `Mesa ${mesa.numero}`}
               </h3>
               <div className="flex items-center gap-1.5 text-xs text-slate-400">
-                <Users className="w-3.5 h-3.5" />
-                <span>Salón Principal</span>
+                {esDomicilio ? (
+                  <>
+                    <Bike className="w-3.5 h-3.5 text-cyan-400" />
+                    <span className="text-cyan-300/90">Entrega / Para Llevar</span>
+                  </>
+                ) : (
+                  <>
+                    <Users className="w-3.5 h-3.5" />
+                    <span>Salón Principal</span>
+                  </>
+                )}
               </div>
             </div>
           </div>
@@ -115,7 +127,7 @@ export default function MesaCard({ mesa }) {
               ) : (
                 <div className="text-xs text-slate-500 italic flex items-center gap-1 py-1">
                   <AlertCircle className="w-3.5 h-3.5" />
-                  Mesa abierta, sin productos aún
+                  {esDomicilio ? 'Pedido a domicilio abierto, sin productos' : 'Mesa abierta, sin productos aún'}
                 </div>
               )}
             </div>
@@ -131,10 +143,14 @@ export default function MesaCard({ mesa }) {
         ) : (
           <div className="py-6 flex flex-col items-center justify-center text-center">
             <div className="w-12 h-12 rounded-full bg-slate-800/60 border border-dashed border-slate-700 flex items-center justify-center text-slate-400 mb-2 group-hover:border-emerald-500/50 group-hover:text-emerald-400 transition-colors">
-              <Plus className="w-6 h-6" />
+              {esDomicilio ? <Bike className="w-6 h-6 text-cyan-400" /> : <Plus className="w-6 h-6" />}
             </div>
-            <p className="text-xs font-semibold text-slate-300">Mesa disponible</p>
-            <p className="text-[11px] text-slate-500">Toca para abrir y tomar pedido</p>
+            <p className="text-xs font-semibold text-slate-300">
+              {esDomicilio ? 'Domicilio disponible' : 'Mesa disponible'}
+            </p>
+            <p className="text-[11px] text-slate-500">
+              {esDomicilio ? 'Toca para tomar pedido para llevar / entrega' : 'Toca para abrir y tomar pedido'}
+            </p>
           </div>
         )}
       </div>
@@ -170,7 +186,7 @@ export default function MesaCard({ mesa }) {
           </>
         ) : (
           <div className="w-full flex items-center justify-between">
-            <span>Abrir Mesa {mesa.numero}</span>
+            <span>{esDomicilio ? 'Abrir Pedido A Domicilio' : `Abrir Mesa ${mesa.numero}`}</span>
             <Plus className="w-4 h-4 text-emerald-400" />
           </div>
         )}

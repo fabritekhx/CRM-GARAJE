@@ -47,8 +47,8 @@ export default function Navbar() {
               }}
             />
             <div className="flex flex-col">
-              <span className="font-extrabold text-lg sm:text-xl tracking-tight bg-gradient-to-r from-amber-400 via-orange-300 to-amber-200 bg-clip-text text-transparent">
-                EL GARAJE
+              <span className="font-extrabold text-base sm:text-lg tracking-tight bg-gradient-to-r from-amber-400 via-orange-300 to-amber-200 bg-clip-text text-transparent">
+                EL GARAJE CALACALEÑO
               </span>
               <span className="text-[10px] sm:text-xs font-semibold text-slate-400 tracking-wider uppercase">
                 Punto de Venta POS
@@ -72,7 +72,7 @@ export default function Navbar() {
               <span>Mesas</span>
               {mesasOcupadasCount > 0 && (
                 <span className="ml-1 px-1.5 py-0.5 text-[11px] font-extrabold rounded-full bg-slate-900 text-amber-400">
-                  {mesasOcupadasCount}/6
+                  {mesasOcupadasCount}/{mesas.length}
                 </span>
               )}
             </NavLink>

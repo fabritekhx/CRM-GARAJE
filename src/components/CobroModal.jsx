@@ -331,7 +331,7 @@ export default function CobroModal() {
             </div>
             <div>
               <h3 className="font-extrabold text-lg text-white flex items-center gap-2">
-                <span>Cobrar Mesa {mesaSeleccionada}</span>
+                <span>Cobrar {mesaSeleccionada === 'Domicilio' ? 'A Domicilio' : `Mesa ${mesaSeleccionada}`}</span>
                 <span className="text-xs px-2 py-0.5 rounded-full bg-slate-800 border border-slate-700 text-amber-400 font-mono">
                   Orden #{pedidoActual.numeroOrden}
                 </span>

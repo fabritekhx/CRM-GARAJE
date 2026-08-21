@@ -256,10 +256,10 @@ export default function Pedidos() {
                       #{pedido.numeroOrden}
                     </td>
 
-                    {/* Mesa */}
+                    {/* Mesa / Domicilio */}
                     <td className="py-3.5 px-4">
-                      <span className="px-2 py-1 rounded-lg bg-slate-800 border border-slate-700 font-semibold text-white">
-                        Mesa {pedido.mesa}
+                      <span className="px-2 py-1 rounded-lg bg-slate-800 border border-slate-700 font-semibold text-white text-xs">
+                        {pedido.mesa === 'Domicilio' || pedido.mesa === 'A Domicilio' ? '🛵 A Domicilio' : `Mesa ${pedido.mesa}`}
                       </span>
                     </td>
 
