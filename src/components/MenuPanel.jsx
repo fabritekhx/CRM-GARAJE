@@ -9,9 +9,7 @@ import {
   Check, 
   X,
   Layers,
-  Citrus,
-  DollarSign,
-  Edit3
+  Citrus
 } from 'lucide-react';
 import { CATEGORIAS, MENU } from '../data/menu';
 import { usePedidos } from '../context/PedidoContext';
@@ -23,13 +21,13 @@ export default function MenuPanel() {
   const [categoriaActiva, setCategoriaActiva] = useState('pescados');
   const [busqueda, setBusqueda] = useState('');
   
-  // Estado para el modal de selección de producto / variantes / otro valor
+  // Estado para el modal de selección de producto / variantes
   const [productoParaVariante, setProductoParaVariante] = useState(null);
   const [varianteSeleccionada, setVarianteSeleccionada] = useState('');
   const [precioSeleccionado, setPrecioSeleccionado] = useState(null);
   const [notasVariante, setNotasVariante] = useState('');
   
-  // Estado para modo "Otro valor / Precio personalizado"
+  // Estado para modo "Otro valor / Precio personalizado" (Exclusivo para la sección Pescados)
   const [esOtroValor, setEsOtroValor] = useState(false);
   const [valorPersonalizadoInput, setValorPersonalizadoInput] = useState('');
 
@@ -52,34 +50,41 @@ export default function MenuPanel() {
   const handleSeleccionarProducto = (prod) => {
     if (!mesaSeleccionada) return;
 
-    setProductoParaVariante(prod);
-    setNotasVariante('');
-    setEsOtroValor(false);
-
     if (prod.tipoVariante === 'tamano_pescado') {
-      // Default Mediano ($5.00)
-      setVarianteSeleccionada(prod.tamanos[1].nombre);
+      // Pescados: Abre modal con Pequeño, Mediano, Grande y la opción de "Otro valor"
+      setProductoParaVariante(prod);
+      setVarianteSeleccionada(prod.tamanos[1].nombre); // Default Mediano
       setPrecioSeleccionado(prod.tamanos[1].precio);
       setValorPersonalizadoInput(prod.tamanos[1].precio.toString());
+      setEsOtroValor(false);
+      setNotasVariante('');
     } else if (prod.tipoVariante === 'sabor' && prod.sabores?.length > 0) {
-      setVarianteSeleccionada(prod.sabores[0]);
-      setPrecioSeleccionado(prod.precioBase);
-      setValorPersonalizadoInput(prod.precioBase.toString());
+      if (prod.sabores.length === 1) {
+        // Un solo sabor (ej. Coca Cola Familiar) se agrega directamente como antes
+        agregarProductoAPedido(prod, prod.sabores[0], prod.precioBase);
+      } else {
+        // Múltiples sabores (Jugos, Gaseosas con variedad): modal simple para elegir sabor
+        setProductoParaVariante(prod);
+        setVarianteSeleccionada(prod.sabores[0]);
+        setPrecioSeleccionado(prod.precioBase);
+        setEsOtroValor(false);
+        setNotasVariante('');
+      }
     } else {
-      setVarianteSeleccionada('');
-      setPrecioSeleccionado(prod.precioBase);
-      setValorPersonalizadoInput(prod.precioBase.toString());
+      // Otras secciones sin variantes (Cervezas, Porciones, etc.): Se agregan directamente con 1 click como antes
+      agregarProductoAPedido(prod, null, prod.precioBase);
     }
   };
 
-  // Confirmar la variante / producto con el valor final
+  // Confirmar la variante / producto
   const handleConfirmarVariante = () => {
     if (!productoParaVariante) return;
     
     let precioFinal = precioSeleccionado;
     let varianteFinal = varianteSeleccionada;
 
-    if (esOtroValor) {
+    // Solo pescados pueden tener "esOtroValor"
+    if (productoParaVariante.categoria === 'pescados' && esOtroValor) {
       const precioNumerico = parseFloat(valorPersonalizadoInput);
       precioFinal = !isNaN(precioNumerico) && precioNumerico >= 0 ? precioNumerico : (precioSeleccionado || 0);
       if (!varianteFinal || varianteFinal === 'Otro valor' || varianteFinal === 'Personalizado') {
@@ -161,7 +166,7 @@ export default function MenuPanel() {
         </div>
       </div>
 
-      {/* Grid de Productos - Diseño limpio original */}
+      {/* Grid de Productos */}
       <div className="flex-1 p-3.5 sm:p-4 overflow-y-auto min-h-[300px]">
         {productosFiltrados.length > 0 ? (
           <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -186,7 +191,7 @@ export default function MenuPanel() {
                     </p>
                   </div>
 
-                  {/* Precios y Botón Limpio */}
+                  {/* Precios y Botón */}
                   <div className="pt-2 border-t border-slate-700/50 mt-auto flex items-center justify-between">
                     <div>
                       {prod.tipoVariante === 'tamano_pescado' ? (
@@ -221,7 +226,7 @@ export default function MenuPanel() {
         )}
       </div>
 
-      {/* MODAL DE SELECCIÓN DE PRODUCTO: TAMAÑOS / SABORES / OTRO VALOR */}
+      {/* MODAL DE SELECCIÓN DE PRODUCTO */}
       {productoParaVariante && (
         <div className="fixed inset-0 z-60 flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="w-full max-w-md bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl p-5 space-y-4 max-h-[90vh] overflow-y-auto">
@@ -230,7 +235,7 @@ export default function MenuPanel() {
             <div className="flex items-start justify-between border-b border-slate-800 pb-3">
               <div>
                 <span className="text-[11px] uppercase font-bold tracking-wider text-amber-400">
-                  {productoParaVariante.categoria === 'pescados' ? 'Seleccionar Tamaño o Valor' : 'Personalizar Producto'}
+                  {productoParaVariante.categoria === 'pescados' ? 'Seleccionar Tamaño o Valor' : 'Seleccionar Sabor'}
                 </span>
                 <h3 className="text-base sm:text-lg font-bold text-white">
                   {productoParaVariante.nombre}
@@ -247,9 +252,9 @@ export default function MenuPanel() {
               </button>
             </div>
 
-            {/* CASO 1: PESCADOS (TAMAÑOS ESTÁNDAR + BOTÓN OTRO VALOR INTEGRADO) */}
+            {/* SECCIÓN PESCADOS: TAMAÑOS ESTÁNDAR + BOTÓN "OTRO VALOR" */}
             {productoParaVariante.tipoVariante === 'tamano_pescado' && (
-              <div className="space-y-2.5">
+              <div className="space-y-3">
                 <label className="text-xs font-semibold text-slate-300">
                   Elige el tamaño o valor del pescado:
                 </label>
@@ -280,7 +285,7 @@ export default function MenuPanel() {
                     );
                   })}
 
-                  {/* Botón "Otro valor" integrado dentro de la selección de tamaños */}
+                  {/* Botón "Otro valor" SOLO en la sección de pescados */}
                   <button
                     type="button"
                     onClick={() => {
@@ -302,16 +307,60 @@ export default function MenuPanel() {
                     </span>
                   </button>
                 </div>
+
+                {/* CAMPO DE ENTRADA Y ATAJOS PARA PESCADOS CUANDO SE ACTIVA "OTRO VALOR" */}
+                {esOtroValor && (
+                  <div className="p-3 bg-slate-950 rounded-xl border border-amber-500/40 space-y-2.5 animate-in fade-in duration-150">
+                    <div className="flex items-center justify-between text-xs text-amber-400 font-semibold">
+                      <span>Ingresa el valor del pescado:</span>
+                      <span className="font-mono text-sm font-bold text-white">
+                        ${parseFloat(valorPersonalizadoInput || 0).toFixed(2)}
+                      </span>
+                    </div>
+
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-base font-bold text-amber-400 font-mono">
+                        $
+                      </span>
+                      <input
+                        type="number"
+                        step="0.25"
+                        min="0"
+                        autoFocus
+                        inputMode="decimal"
+                        value={valorPersonalizadoInput}
+                        onChange={(e) => setValorPersonalizadoInput(e.target.value)}
+                        placeholder="0.00"
+                        className="w-full pl-8 pr-4 py-2 bg-slate-900 border border-slate-700 focus:border-amber-500 rounded-xl text-white font-mono font-bold text-base focus:outline-none"
+                      />
+                    </div>
+
+                    {/* Atajos de valores rápidos para pescados */}
+                    <div className="flex items-center gap-1.5 flex-wrap pt-1">
+                      <span className="text-[10px] text-slate-400 mr-1">Rápidos:</span>
+                      {[3.50, 4.00, 4.50, 5.00, 6.00, 7.00, 8.00, 10.00].map((val) => (
+                        <button
+                          key={val}
+                          type="button"
+                          onClick={() => setValorPersonalizadoInput(val.toString())}
+                          className="px-2 py-1 rounded-lg bg-slate-800 hover:bg-amber-500/20 text-slate-300 hover:text-amber-300 border border-slate-700 text-[11px] font-mono font-semibold transition-colors"
+                        >
+                          ${val.toFixed(2)}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
-            {/* CASO 2: SABORES PARA JUGOS Y GASEOSAS */}
+            {/* SECCIÓN JUGOS Y GASEOSAS: SELECCIÓN SIMPLE DE SABOR (COMO ESTABA ANTES) */}
             {productoParaVariante.tipoVariante === 'sabor' && productoParaVariante.sabores?.length > 0 && (
               <div className="space-y-2">
                 <label className="text-xs font-semibold text-slate-300">
                   Elige el sabor:
                 </label>
-                <div className="grid grid-cols-2 gap-2 max-h-36 overflow-y-auto pr-1">
+                <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto pr-1">
                   {productoParaVariante.sabores.map((sabor) => {
                     const seleccionado = varianteSeleccionada === sabor;
                     return (
@@ -319,7 +368,7 @@ export default function MenuPanel() {
                         key={sabor}
                         type="button"
                         onClick={() => setVarianteSeleccionada(sabor)}
-                        className={`p-2 rounded-xl border text-left text-xs font-semibold flex items-center justify-between transition-all ${
+                        className={`p-2.5 rounded-xl border text-left text-xs font-semibold flex items-center justify-between transition-all ${
                           seleccionado
                             ? 'bg-amber-500 text-slate-950 border-amber-400 font-bold'
                             : 'bg-slate-800 text-slate-300 border-slate-700 hover:border-slate-600'
@@ -334,79 +383,8 @@ export default function MenuPanel() {
               </div>
             )}
 
-            {/* OPCIÓN "OTRO VALOR" (Disponible en todos los productos al entrar) */}
-            {productoParaVariante.tipoVariante !== 'tamano_pescado' && (
-              <div className="pt-2 border-t border-slate-800 flex items-center justify-between">
-                <div className="text-xs text-slate-300 font-medium">
-                  Precio base: <span className="font-bold text-amber-400 font-mono">{formatearDinero(productoParaVariante.precioBase)}</span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const nuevo = !esOtroValor;
-                    setEsOtroValor(nuevo);
-                    if (nuevo && !valorPersonalizadoInput) {
-                      setValorPersonalizadoInput(productoParaVariante.precioBase.toString());
-                    }
-                  }}
-                  className={`py-1 px-2.5 rounded-lg text-xs font-bold transition-all border flex items-center gap-1.5 ${
-                    esOtroValor
-                      ? 'bg-amber-500 text-slate-950 border-amber-400 shadow-md shadow-amber-500/20'
-                      : 'bg-slate-800 text-amber-400 border-amber-500/30 hover:bg-slate-700'
-                  }`}
-                >
-                  <DollarSign className="w-3.5 h-3.5" />
-                  <span>{esOtroValor ? 'Otro valor activo' : 'Agregar otro valor'}</span>
-                </button>
-              </div>
-            )}
-
-            {/* CAMPO DE ENTRADA CUANDO ESTÁ ACTIVO "OTRO VALOR" */}
-            {esOtroValor && (
-              <div className="p-3 bg-slate-950 rounded-xl border border-amber-500/40 space-y-2.5 animate-in fade-in duration-150">
-                <div className="flex items-center justify-between text-xs text-amber-400 font-semibold">
-                  <span>Ingresa el valor personalizado:</span>
-                  <span className="font-mono text-sm font-bold text-white">
-                    ${parseFloat(valorPersonalizadoInput || 0).toFixed(2)}
-                  </span>
-                </div>
-
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-base font-bold text-amber-400 font-mono">
-                    $
-                  </span>
-                  <input
-                    type="number"
-                    step="0.25"
-                    min="0"
-                    autoFocus
-                    inputMode="decimal"
-                    value={valorPersonalizadoInput}
-                    onChange={(e) => setValorPersonalizadoInput(e.target.value)}
-                    placeholder="0.00"
-                    className="w-full pl-8 pr-4 py-2 bg-slate-900 border border-slate-700 focus:border-amber-500 rounded-xl text-white font-mono font-bold text-base focus:outline-none"
-                  />
-                </div>
-
-                {/* Atajos de valores rápidos */}
-                <div className="flex items-center gap-1.5 flex-wrap pt-1">
-                  <span className="text-[10px] text-slate-400 mr-1">Rápidos:</span>
-                  {[3.50, 4.00, 4.50, 5.00, 6.00, 7.00, 8.00, 10.00].map((val) => (
-                    <button
-                      key={val}
-                      type="button"
-                      onClick={() => setValorPersonalizadoInput(val.toString())}
-                      className="px-2 py-1 rounded-lg bg-slate-800 hover:bg-amber-500/20 text-slate-300 hover:text-amber-300 border border-slate-700 text-[11px] font-mono font-semibold transition-colors"
-                    >
-                      ${val.toFixed(2)}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
             {/* Notas opcionales de cocina */}
-            <div className="space-y-1.5">
+            <div className="space-y-1.5 pt-1">
               <label className="text-xs font-semibold text-slate-300">
                 Nota de preparación (opcional):
               </label>
@@ -439,7 +417,7 @@ export default function MenuPanel() {
                 <Plus className="w-4 h-4" />
                 <span>
                   Agregar (
-                  {esOtroValor 
+                  {productoParaVariante.categoria === 'pescados' && esOtroValor 
                     ? `$${parseFloat(valorPersonalizadoInput || 0).toFixed(2)}` 
                     : formatearDinero(precioSeleccionado || productoParaVariante.precioBase)}
                   )
