@@ -15,9 +15,7 @@ import {
   X,
   Phone,
   User,
-  MapPin,
-  RefreshCw,
-  Cloud
+  MapPin
 } from 'lucide-react';
 import { usePedidos } from '../context/PedidoContext';
 import { DIAS_ATENCION } from '../data/menu';
@@ -34,9 +32,7 @@ export default function Mesas() {
     diaSeleccionado, 
     setDiaSeleccionado,
     agregarMesa,
-    agregarDomicilio,
-    sincronizarConSupabase,
-    sincronizando
+    agregarDomicilio
   } = usePedidos();
 
   const [mostrarConfirmacionLiberar, setMostrarConfirmacionLiberar] = useState(false);
@@ -107,20 +103,8 @@ export default function Mesas() {
           </p>
         </div>
 
-        {/* Botonera de Acciones: Sincronizar, + Mesa, + Domicilio, Liberar */}
+        {/* Botonera de Acciones: + Mesa, + Domicilio, Liberar */}
         <div className="flex items-center gap-2.5 flex-wrap">
-          
-          {/* Botón Sincronizar */}
-          <button
-            type="button"
-            onClick={() => sincronizarConSupabase(true)}
-            disabled={sincronizando}
-            className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-750 text-slate-300 hover:text-white border border-slate-700 text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-sm active:scale-95"
-            title="Sincronizar mesas y pedidos con Supabase en la nube"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 text-amber-400 ${sincronizando ? 'animate-spin' : ''}`} />
-            <span className="hidden sm:inline">{sincronizando ? 'Sincronizando...' : 'Sincronizar'}</span>
-          </button>
 
           {/* Botón Nuevo Domicilio */}
           <button

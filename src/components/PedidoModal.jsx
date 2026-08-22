@@ -10,14 +10,11 @@ import {
   FileText, 
   Clock, 
   Users, 
-  ChevronLeft,
-  MessageSquare,
-  Sparkles,
-  ShoppingBag,
-  Bike,
-  Cloud,
-  CloudCheck,
-  Save
+  ChevronLeft, 
+  MessageSquare, 
+  Sparkles, 
+  ShoppingBag, 
+  Bike 
 } from 'lucide-react';
 import { usePedidos } from '../context/PedidoContext';
 import { formatearDinero, formatearHora } from '../utils/helpers';
@@ -36,7 +33,6 @@ export default function PedidoModal() {
     actualizarNotasItem, 
     actualizarPrecioItem,
     actualizarNotasPedido,
-    guardarComandaEnNube,
     cancelarPedidoMesa,
     cerrarModalPedido,
     mostrarNotificacion
@@ -48,25 +44,12 @@ export default function PedidoModal() {
   const [tempNote, setTempNote] = useState('');
   const [editingPriceIndex, setEditingPriceIndex] = useState(null);
   const [tempPrice, setTempPrice] = useState('');
-  const [guardandoNube, setGuardandoNube] = useState(false);
 
   if (!isPedidoModalOpen || !mesaSeleccionada) return null;
 
   const productos = pedidoActual?.productos || [];
   const cantidadTotal = productos.reduce((acc, p) => acc + (p.cantidad || 0), 0);
   const total = pedidoActual?.total || 0;
-
-  const handleGuardarManual = async () => {
-    setGuardandoNube(true);
-    await guardarComandaEnNube();
-    setTimeout(() => setGuardandoNube(false), 800);
-  };
-
-  const handleGuardarYSalir = async () => {
-    setGuardandoNube(true);
-    await guardarComandaEnNube();
-    cerrarModalPedido();
-  };
 
   const handleProcederCobro = () => {
     if (productos.length === 0) {
@@ -121,20 +104,8 @@ export default function PedidoModal() {
             </div>
           </div>
 
-          {/* Toggle en pantallas pequeñas y botón guardar */}
+          {/* Toggle en pantallas pequeñas */}
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={handleGuardarManual}
-              disabled={guardandoNube}
-              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-bold transition-all active:scale-95"
-              title="Guardar comanda en la nube para ver en otros navegadores"
-            >
-              <Save className="w-3.5 h-3.5 text-amber-400" />
-              <span>{guardandoNube ? 'Guardando...' : 'Guardar Comanda'}</span>
-            </button>
-
-            {/* Toggle en pantallas pequeñas */}
             <div className="flex lg:hidden items-center bg-slate-800 p-1 rounded-xl border border-slate-700">
               <button
                 onClick={() => setTabMovil('menu')}
@@ -161,9 +132,9 @@ export default function PedidoModal() {
 
             {/* Botón Cerrar Modal */}
             <button
-              onClick={handleGuardarYSalir}
+              onClick={cerrarModalPedido}
               className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
-              title="Guardar comanda y volver a mesas"
+              title="Volver a mesas"
             >
               <X className="w-6 h-6" />
             </button>
@@ -416,11 +387,10 @@ export default function PedidoModal() {
               <div className="grid grid-cols-2 gap-3 pt-1">
                 <button
                   type="button"
-                  onClick={handleGuardarYSalir}
+                  onClick={cerrarModalPedido}
                   className="py-3 px-4 rounded-xl border border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700 font-bold text-xs sm:text-sm transition-all flex items-center justify-center gap-1.5"
                 >
-                  <Save className="w-4 h-4 text-amber-400" />
-                  <span>Guardar y Salir</span>
+                  <span>Volver a Mesas</span>
                 </button>
 
                 <button

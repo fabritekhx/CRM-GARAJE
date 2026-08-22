@@ -225,8 +225,8 @@ export const PedidoProvider = ({ children }) => {
     transmitirCambiosMesas(mesas, ultimoNumeroOrden);
   }, [mesas, ultimoNumeroOrden, transmitirCambiosMesas]);
 
-  // Cargar datos de Supabase al iniciar o sincronizar
-  const sincronizarConSupabase = useCallback(async (mostrarMensaje = true) => {
+  // Cargar datos de Supabase al iniciar o sincronizar silenciosamente
+  const sincronizarConSupabase = useCallback(async (mostrarMensaje = false) => {
     setSincronizando(true);
     try {
       // 1. Probar conexión
@@ -281,19 +281,16 @@ export const PedidoProvider = ({ children }) => {
       }
 
       if (mostrarMensaje) {
-        mostrarNotificacion('Conexión y pedidos abiertos sincronizados con Supabase', 'success');
+        mostrarNotificacion('Sincronización automática activa', 'success');
       }
     } catch (error) {
-      console.error('Error sincronizando:', error);
-      if (mostrarMensaje) {
-        mostrarNotificacion('Trabajando en modo local (los datos se sincronizarán al conectarse)', 'info');
-      }
+      console.warn('Sincronización automática silenciosa:', error);
     } finally {
       setSincronizando(false);
     }
   }, [mostrarNotificacion]);
 
-  // Configurar listeners en tiempo real (Supabase Realtime Channel + BroadcastChannel + Window Focus)
+  // Configurar listeners en tiempo real y ciclo de sincronización automática continua
   useEffect(() => {
     // 1. Carga inicial
     sincronizarConSupabase(false);
@@ -338,11 +335,15 @@ export const PedidoProvider = ({ children }) => {
 
     // 4. Listener cuando el usuario cambia de ventana o regresa a la pestaña (Visibility / Focus)
     const handleFocus = () => {
-      // Re-sincronizar mesas abiertas desde Supabase para asegurar datos frescos
       cargarMesasActivasDesdeSupabase().then((res) => {
         if (res.success && Array.isArray(res.mesas) && res.mesas.length > 0) {
-          isRemoteSyncRef.current = true;
-          setMesas(res.mesas);
+          setMesas((current) => {
+            if (JSON.stringify(current) !== JSON.stringify(res.mesas)) {
+              isRemoteSyncRef.current = true;
+              return res.mesas;
+            }
+            return current;
+          });
           if (res.ultimoNumeroOrden) {
             setUltimoNumeroOrden((prev) => Math.max(prev, res.ultimoNumeroOrden));
           }
@@ -357,8 +358,50 @@ export const PedidoProvider = ({ children }) => {
       }
     });
 
+    // 5. Polling automático en segundo plano (cada 2.5 segundos) para sincronizar mesas y pedidos abiertos automáticamente
+    const pollingMesasInterval = setInterval(async () => {
+      try {
+        const res = await cargarMesasActivasDesdeSupabase();
+        if (res.success && Array.isArray(res.mesas) && res.mesas.length > 0) {
+          setMesas((current) => {
+            const currentStr = JSON.stringify(current);
+            const remoteStr = JSON.stringify(res.mesas);
+            if (currentStr !== remoteStr) {
+              isRemoteSyncRef.current = true;
+              return res.mesas;
+            }
+            return current;
+          });
+          if (res.ultimoNumeroOrden) {
+            setUltimoNumeroOrden((prev) => Math.max(prev, res.ultimoNumeroOrden));
+          }
+        }
+      } catch {
+        // Silencioso
+      }
+    }, 2500);
+
+    // 6. Polling automático en segundo plano para pedidos pagados e historial (cada 6 segundos)
+    const pollingPedidosInterval = setInterval(async () => {
+      try {
+        const res = await cargarPedidosDesdeSupabase();
+        if (res.success && Array.isArray(res.data) && res.data.length > 0) {
+          setPedidosHistorial((current) => {
+            if (current.length !== res.data.length) {
+              return res.data;
+            }
+            return current;
+          });
+        }
+      } catch {
+        // Silencioso
+      }
+    }, 6000);
+
     return () => {
       window.removeEventListener('focus', handleFocus);
+      clearInterval(pollingMesasInterval);
+      clearInterval(pollingPedidosInterval);
       if (supabaseChannelRef.current) {
         supabase.removeChannel(supabaseChannelRef.current);
       }
