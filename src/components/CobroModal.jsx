@@ -11,6 +11,7 @@ import {
   FileCheck,
   Receipt,
   Users,
+  User,
   Layers,
   Plus,
   Trash2,
@@ -59,6 +60,7 @@ export default function CobroModal() {
   const [nuevoPagoMetodo, setNuevoPagoMetodo] = useState('efectivo');
   const [nuevoPagoBanco, setNuevoPagoBanco] = useState('DeUna');
   const [nuevoPagoNombre, setNuevoPagoNombre] = useState('');
+  const [notasCobro, setNotasCobro] = useState('');
 
   const [procesando, setProcesando] = useState(false);
 
@@ -71,6 +73,7 @@ export default function CobroModal() {
       setMontoRecibido(total.toString());
       setBanco('');
       setComprobante('');
+      setNotasCobro(pedidoActual?.notas || '');
 
       // Inicializar mixto: mitad y mitad por defecto
       const mitad = (total / 2).toFixed(2);
@@ -87,7 +90,7 @@ export default function CobroModal() {
       setNuevoPagoMonto('');
       setNuevoPagoNombre('');
     }
-  }, [isCobroModalOpen, total]);
+  }, [isCobroModalOpen, total, pedidoActual]);
 
   // Función para inicializar comensales en partes iguales
   const inicializarPersonasIguales = (personas, montoTotal) => {
@@ -232,6 +235,7 @@ export default function CobroModal() {
       }
       datosFinales = {
         metodoPago: 'efectivo',
+        notas: notasCobro.trim() !== '' ? notasCobro.trim() : (pedidoActual?.notas || ''),
         montoEfectivo: total,
         montoTransferencia: 0,
         montoRecibido: numMontoRecibido,
@@ -245,6 +249,7 @@ export default function CobroModal() {
     } else if (metodoPago === 'transferencia') {
       datosFinales = {
         metodoPago: 'transferencia',
+        notas: notasCobro.trim() !== '' ? notasCobro.trim() : (pedidoActual?.notas || ''),
         montoEfectivo: 0,
         montoTransferencia: total,
         montoRecibido: total,
@@ -262,6 +267,7 @@ export default function CobroModal() {
       }
       datosFinales = {
         metodoPago: 'mixto',
+        notas: notasCobro.trim() !== '' ? notasCobro.trim() : (pedidoActual?.notas || ''),
         montoEfectivo: numMixtoEfec,
         montoTransferencia: numMixtoTransf,
         montoRecibido: numMixtoTransf + numMixtoEntregado,
@@ -299,6 +305,7 @@ export default function CobroModal() {
 
       datosFinales = {
         metodoPago: 'dividido',
+        notas: notasCobro.trim() !== '' ? notasCobro.trim() : (pedidoActual?.notas || ''),
         montoEfectivo: totEfec,
         montoTransferencia: totTransf,
         montoRecibido: total,
@@ -364,6 +371,18 @@ export default function CobroModal() {
             <div className="text-3xl sm:text-4xl font-black text-amber-400 font-mono tracking-tight">
               {formatearDinero(total)}
             </div>
+          </div>
+
+          {/* Nombre de Cliente / Referencia del Cobro */}
+          <div className="px-3.5 py-2 bg-slate-800/80 border border-slate-700/80 rounded-2xl flex items-center gap-2.5">
+            <User className="w-4 h-4 text-amber-400 shrink-0" />
+            <input
+              type="text"
+              value={notasCobro}
+              onChange={(e) => setNotasCobro(e.target.value)}
+              placeholder="Nombre del cliente o nota (ej. Carlos, Juan, etc.)..."
+              className="w-full bg-transparent text-xs text-white placeholder-slate-400 focus:outline-none"
+            />
           </div>
 
           {/* Selector de Métodos de Pago (4 Opciones) */}

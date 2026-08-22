@@ -10,6 +10,7 @@ import {
   FileText, 
   Clock, 
   Users, 
+  User,
   ChevronLeft, 
   MessageSquare, 
   Sparkles, 
@@ -362,14 +363,15 @@ export default function PedidoModal() {
             {/* Totalizador y Acciones de Cobro */}
             <div className="p-4 bg-slate-900 border-t border-slate-800 space-y-3">
               
-              {/* Notas generales del pedido */}
-              <div className="flex items-center gap-2">
+              {/* Notas generales del pedido / Nombre del Cliente */}
+              <div className="relative flex items-center">
+                <User className="absolute left-3 w-3.5 h-3.5 text-amber-400" />
                 <input
                   type="text"
                   value={pedidoActual?.notas || ''}
                   onChange={(e) => actualizarNotasPedido(e.target.value)}
-                  placeholder="Nota general del pedido (ej. Cliente frecuente, cumpleaños)..."
-                  className="w-full px-3 py-1.5 bg-slate-800/90 border border-slate-700 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-500"
+                  placeholder="Nombre del cliente o notas (ej. Carlos, sin cebolla)..."
+                  className="w-full pl-9 pr-3 py-1.5 bg-slate-800/90 border border-slate-700 rounded-xl text-xs text-white placeholder-slate-400 focus:outline-none focus:border-amber-500 transition-colors"
                 />
               </div>
 

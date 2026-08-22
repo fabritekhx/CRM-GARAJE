@@ -826,6 +826,7 @@ export const PedidoProvider = ({ children }) => {
       cambio = 0, 
       comprobante = '', 
       banco = '', 
+      notas,
       desglosePagos = [] 
     } = datosCobro;
 
@@ -836,6 +837,7 @@ export const PedidoProvider = ({ children }) => {
       fecha: fechaActual.toISOString(),
       estado: 'pagado',
       metodoPago,
+      notas: (notas !== undefined) ? notas : (pedidoActual.notas || ''),
       montoEfectivo: Number(montoEfectivo) || (metodoPago === 'efectivo' ? Number(pedidoActual.total) : 0),
       montoTransferencia: Number(montoTransferencia) || (metodoPago === 'transferencia' ? Number(pedidoActual.total) : 0),
       montoRecibido: Number(montoRecibido) || Number(pedidoActual.total),
