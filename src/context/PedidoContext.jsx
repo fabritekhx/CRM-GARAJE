@@ -147,6 +147,11 @@ export const PedidoProvider = ({ children }) => {
   const isRemoteSyncRef = useRef(false);
   const debounceTimerRef = useRef(null);
   const supabaseChannelRef = useRef(null);
+  const lastLocalMutationTimestampRef = useRef(0);
+  const autoCierreEjecutadoRef = useRef(new Set());
+
+  // Fecha actual observada por la app (se actualiza automáticamente a medianoche 00:00:00)
+  const [fechaActualApp, setFechaActualApp] = useState(() => new Date().toISOString().split('T')[0]);
 
   // Guardar en localStorage automáticamente ante cambios locales
   useEffect(() => {
@@ -336,6 +341,10 @@ export const PedidoProvider = ({ children }) => {
     if (localBroadcastChannel) {
       localBroadcastChannel.onmessage = (event) => {
         if (event.data?.tipo === 'SYNC_MESAS' && Array.isArray(event.data.mesas)) {
+          // Si el usuario acaba de interactuar localmente, ignorar para evitar parpadeos o carreras
+          if (Date.now() - lastLocalMutationTimestampRef.current < 3500) {
+            return;
+          }
           isRemoteSyncRef.current = true;
           setMesas(event.data.mesas);
           if (event.data.ultimoNumeroOrden) {
@@ -347,6 +356,9 @@ export const PedidoProvider = ({ children }) => {
 
     // 4. Listener cuando el usuario cambia de ventana o regresa a la pestaña (Visibility / Focus)
     const handleFocus = () => {
+      if (Date.now() - lastLocalMutationTimestampRef.current < 3500) {
+        return;
+      }
       cargarMesasActivasDesdeSupabase().then((res) => {
         if (res.success && Array.isArray(res.mesas) && res.mesas.length > 0) {
           setMesas((current) => {
@@ -370,8 +382,12 @@ export const PedidoProvider = ({ children }) => {
       }
     });
 
-    // 5. Polling automático en segundo plano (cada 2.5 segundos) para sincronizar mesas y pedidos abiertos automáticamente
+    // 5. Polling automático en segundo plano para sincronizar mesas y pedidos abiertos
     const pollingMesasInterval = setInterval(async () => {
+      // Si hubo mutación local reciente, no pisar el estado con polling
+      if (Date.now() - lastLocalMutationTimestampRef.current < 3500) {
+        return;
+      }
       try {
         const res = await cargarMesasActivasDesdeSupabase();
         if (res.success && Array.isArray(res.mesas) && res.mesas.length > 0) {
@@ -391,9 +407,9 @@ export const PedidoProvider = ({ children }) => {
       } catch {
         // Silencioso
       }
-    }, 2500);
+    }, 3000);
 
-    // 6. Polling automático en segundo plano para pedidos pagados e historial (cada 6 segundos)
+    // 6. Polling automático en segundo plano para pedidos pagados e historial
     const pollingPedidosInterval = setInterval(async () => {
       try {
         const res = await cargarPedidosDesdeSupabase();
@@ -420,6 +436,57 @@ export const PedidoProvider = ({ children }) => {
     };
   }, [sincronizarConSupabase]);
 
+  // Scheduler de Cierre Automático a las 23:59:59 y detección de cambio de día a las 00:00:00
+  useEffect(() => {
+    const verificarYEjecutarAutoCierre = async () => {
+      const ahora = new Date();
+      const hora = ahora.getHours();
+      const minutos = ahora.getMinutes();
+      const segundos = ahora.getSeconds();
+      const hoyStr = ahora.toISOString().split('T')[0];
+
+      // 1. Detección de cambio de día (00:00:00) para reiniciar la vista activa
+      setFechaActualApp((fechaAnterior) => {
+        if (fechaAnterior !== hoyStr) {
+          // Si el día anterior no fue cerrado y tenía pedidos, guardarlo en el historial
+          const pedidosDiaAnterior = pedidosHistorial.filter((p) => {
+            const f = typeof p.fecha === 'string' ? p.fecha.split('T')[0] : '';
+            return f === fechaAnterior && p.estado === 'pagado';
+          });
+          const yaCerrado = cierresHistorial.some((c) => c.id === fechaAnterior);
+          if (pedidosDiaAnterior.length > 0 && !yaCerrado && !autoCierreEjecutadoRef.current.has(fechaAnterior)) {
+            autoCierreEjecutadoRef.current.add(fechaAnterior);
+            realizarCierreCaja(fechaAnterior, true);
+          }
+          return hoyStr;
+        }
+        return fechaAnterior;
+      });
+
+      // 2. Ejecutar cierre automático a las 23:59:59 (entre segundo 50 y 59)
+      if (hora === 23 && minutos === 59 && segundos >= 50) {
+        if (!autoCierreEjecutadoRef.current.has(hoyStr)) {
+          const pedidosHoy = pedidosHistorial.filter((p) => {
+            const f = typeof p.fecha === 'string' ? p.fecha.split('T')[0] : '';
+            return f === hoyStr && p.estado === 'pagado';
+          });
+          const yaCerrado = cierresHistorial.some((c) => c.id === hoyStr);
+          if (pedidosHoy.length > 0 && !yaCerrado) {
+            autoCierreEjecutadoRef.current.add(hoyStr);
+            console.log(`[Auto-Cierre 23:59:59] Guardando cierre automático para ${hoyStr}...`);
+            await realizarCierreCaja(hoyStr, true);
+          }
+        }
+      }
+    };
+
+    const intervalId = setInterval(verificarYEjecutarAutoCierre, 10000);
+    // Ejecución inicial al montar
+    verificarYEjecutarAutoCierre();
+
+    return () => clearInterval(intervalId);
+  }, [pedidosHistorial, cierresHistorial]);
+
   // Guardado manual explícito con confirmación al usuario
   const guardarComandaEnNube = async () => {
     setSincronizando(true);
@@ -438,6 +505,7 @@ export const PedidoProvider = ({ children }) => {
 
   // Abrir mesa para ver o crear pedido
   const abrirMesa = (numeroMesa) => {
+    lastLocalMutationTimestampRef.current = Date.now();
     const mesa = mesas.find((m) => m.numero === numeroMesa);
     if (!mesa) return;
 
@@ -484,6 +552,7 @@ export const PedidoProvider = ({ children }) => {
 
   // Agregar producto al pedido actual
   const agregarProductoAPedido = (producto, variante = null, precioPersonalizado = null, notas = '') => {
+    lastLocalMutationTimestampRef.current = Date.now();
     if (!mesaSeleccionada) return;
 
     setMesas((prev) =>
@@ -550,6 +619,7 @@ export const PedidoProvider = ({ children }) => {
 
   // Cambiar cantidad de un producto
   const cambiarCantidad = (itemIndex, delta) => {
+    lastLocalMutationTimestampRef.current = Date.now();
     if (!mesaSeleccionada) return;
 
     setMesas((prev) =>
@@ -587,6 +657,7 @@ export const PedidoProvider = ({ children }) => {
 
   // Eliminar producto del pedido
   const eliminarProducto = (itemIndex) => {
+    lastLocalMutationTimestampRef.current = Date.now();
     if (!mesaSeleccionada) return;
 
     setMesas((prev) =>
@@ -610,6 +681,7 @@ export const PedidoProvider = ({ children }) => {
 
   // Actualizar notas de un ítem individual
   const actualizarNotasItem = (itemIndex, notas) => {
+    lastLocalMutationTimestampRef.current = Date.now();
     if (!mesaSeleccionada) return;
 
     setMesas((prev) =>
@@ -637,6 +709,7 @@ export const PedidoProvider = ({ children }) => {
 
   // Actualizar precio de un ítem individual
   const actualizarPrecioItem = (itemIndex, nuevoPrecio) => {
+    lastLocalMutationTimestampRef.current = Date.now();
     if (!mesaSeleccionada) return;
 
     setMesas((prev) =>
@@ -668,6 +741,7 @@ export const PedidoProvider = ({ children }) => {
 
   // Actualizar notas generales del pedido
   const actualizarNotasPedido = (notas) => {
+    lastLocalMutationTimestampRef.current = Date.now();
     if (!mesaSeleccionada) return;
 
     setMesas((prev) =>
@@ -686,6 +760,7 @@ export const PedidoProvider = ({ children }) => {
 
   // Cerrar modal de pedido y liberar mesa automáticamente si no tiene ítems
   const cerrarModalPedido = () => {
+    lastLocalMutationTimestampRef.current = Date.now();
     if (mesaSeleccionada) {
       setMesas((prev) =>
         prev.map((m) => {
@@ -704,6 +779,7 @@ export const PedidoProvider = ({ children }) => {
 
   // Agregar una nueva mesa dinámica
   const agregarMesa = (nombrePersonalizado = '') => {
+    lastLocalMutationTimestampRef.current = Date.now();
     const numeros = mesas
       .filter((m) => m.tipo === 'mesa' && typeof m.numero === 'number')
       .map((m) => m.numero);
@@ -728,6 +804,7 @@ export const PedidoProvider = ({ children }) => {
 
   // Agregar un nuevo pedido a domicilio y abrir comanda directamente
   const agregarDomicilio = (nombreCliente = '', telefonoOReferencia = '') => {
+    lastLocalMutationTimestampRef.current = Date.now();
     const domiciliosExistentes = mesas.filter((m) => m.tipo === 'domicilio');
     const conteo = domiciliosExistentes.length + 1;
     const identificador = `Dom #${conteo}`;
@@ -773,6 +850,7 @@ export const PedidoProvider = ({ children }) => {
 
   // Eliminar una mesa o cuadro de domicilio
   const eliminarMesa = (idONumero) => {
+    lastLocalMutationTimestampRef.current = Date.now();
     setMesas((prev) =>
       prev.filter((m) => m.id !== idONumero && m.numero !== idONumero)
     );
@@ -786,6 +864,7 @@ export const PedidoProvider = ({ children }) => {
 
   // Liberar todas las mesas activas de una sola vez
   const liberarTodasLasMesas = () => {
+    lastLocalMutationTimestampRef.current = Date.now();
     setMesas(MESAS_INICIALES);
     localStorage.setItem(STORAGE_MESAS, JSON.stringify(MESAS_INICIALES));
     setIsPedidoModalOpen(false);
@@ -796,6 +875,7 @@ export const PedidoProvider = ({ children }) => {
 
   // Cancelar/Vaciar pedido de una mesa
   const cancelarPedidoMesa = (numeroMesa) => {
+    lastLocalMutationTimestampRef.current = Date.now();
     setMesas((prev) =>
       prev.map((m) =>
         m.numero === numeroMesa
@@ -811,6 +891,7 @@ export const PedidoProvider = ({ children }) => {
 
   // Procesar cobro y guardar en Supabase y Firestore
   const confirmarCobro = async (datosCobro) => {
+    lastLocalMutationTimestampRef.current = Date.now();
     if (!mesaSeleccionada || !pedidoActual) return;
 
     if (!pedidoActual.productos || pedidoActual.productos.length === 0) {
@@ -911,7 +992,8 @@ export const PedidoProvider = ({ children }) => {
   };
 
   // Realizar cierre de caja diario
-  const realizarCierreCaja = async (fechaFiltro = new Date().toISOString().split('T')[0]) => {
+  const realizarCierreCaja = async (fechaFiltro = new Date().toISOString().split('T')[0], esAutomatico = false) => {
+    lastLocalMutationTimestampRef.current = Date.now();
     // Filtrar pedidos de esa fecha
     const pedidosDelDia = pedidosHistorial.filter((p) => {
       const fechaP = typeof p.fecha === 'string' ? p.fecha.split('T')[0] : new Date(p.fecha).toISOString().split('T')[0];
@@ -919,7 +1001,9 @@ export const PedidoProvider = ({ children }) => {
     });
 
     if (pedidosDelDia.length === 0) {
-      mostrarNotificacion(`No hay pedidos registrados para la fecha ${fechaFiltro}`, 'error');
+      if (!esAutomatico) {
+        mostrarNotificacion(`No hay pedidos registrados para la fecha ${fechaFiltro}`, 'error');
+      }
       return null;
     }
 
@@ -962,6 +1046,7 @@ export const PedidoProvider = ({ children }) => {
       totalGeneral: Number(totalGeneral.toFixed(2)),
       numPedidos: pedidosDelDia.length,
       productosMasVendidos,
+      esAutomatico: !!esAutomatico,
     };
 
     // 1. Guardar en Supabase
@@ -990,12 +1075,17 @@ export const PedidoProvider = ({ children }) => {
       return [cierre, ...sinExistente];
     });
 
-    mostrarNotificacion(`Cierre de caja para ${fechaFiltro} guardado en Supabase`, 'success');
+    if (esAutomatico) {
+      mostrarNotificacion(`⏰ Cierre automático a las 23:59:59 (${fechaFiltro}) guardado en la nube`, 'info');
+    } else {
+      mostrarNotificacion(`Cierre de caja para ${fechaFiltro} guardado en Supabase`, 'success');
+    }
     return cierre;
   };
 
   // Eliminar un pedido del historial (Supabase + Firestore + Local)
   const eliminarPedidoHistorial = async (pedidoId) => {
+    lastLocalMutationTimestampRef.current = Date.now();
     // 1. Eliminar de Supabase
     try {
       await eliminarPedidoEnSupabase(pedidoId);
@@ -1027,6 +1117,7 @@ export const PedidoProvider = ({ children }) => {
         pedidosHistorial,
         cierresHistorial,
         ultimoNumeroOrden,
+        fechaActualApp,
         isPedidoModalOpen,
         isCobroModalOpen,
         isTicketModalOpen,

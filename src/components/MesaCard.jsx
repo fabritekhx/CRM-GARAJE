@@ -13,7 +13,7 @@ import {
 import { usePedidos } from '../context/PedidoContext';
 import { formatearDinero, formatearHora } from '../utils/helpers';
 
-export default function MesaCard({ mesa }) {
+function MesaCard({ mesa }) {
   const { abrirMesa, setMesaSeleccionada, setIsCobroModalOpen, eliminarMesa } = usePedidos();
   const [mostrarConfirmacionBorrar, setMostrarConfirmacionBorrar] = useState(false);
 
@@ -264,3 +264,5 @@ export default function MesaCard({ mesa }) {
     </div>
   );
 }
+
+export default React.memo(MesaCard);

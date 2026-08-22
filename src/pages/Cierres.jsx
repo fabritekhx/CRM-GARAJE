@@ -26,15 +26,18 @@ export default function Cierres() {
   const { 
     pedidosHistorial, 
     cierresHistorial, 
+    fechaActualApp,
     realizarCierreCaja, 
     mostrarNotificacion 
   } = usePedidos();
 
-  // Fecha seleccionada para el nuevo cierre (por defecto hoy)
-  const hoyIso = new Date().toISOString().split('T')[0];
-  const [fechaCierre, setFechaCierre] = useState(hoyIso);
+  // Fecha seleccionada para el nuevo cierre (por defecto hoy en base a fechaActualApp)
+  const [fechaCierre, setFechaCierre] = useState(fechaActualApp || new Date().toISOString().split('T')[0]);
   const [cierreSeleccionadoDetalle, setCierreSeleccionadoDetalle] = useState(null);
   const [procesando, setProcesando] = useState(false);
+
+  // Sincronizar fechaCierre cuando cambie de día en vivo si el usuario está viendo "hoy"
+  const esHoy = fechaCierre === (fechaActualApp || new Date().toISOString().split('T')[0]);
 
   // Calcular métricas en vivo para la fecha seleccionada
   const resumenVivo = useMemo(() => {
@@ -117,19 +120,73 @@ export default function Cierres() {
             <span>Cierre Diario de Caja</span>
           </h1>
           <p className="text-xs sm:text-sm text-slate-400">
-            Arqueo y balance de caja diario con guardado automático en Firebase Firestore.
+            Arqueo y balance de caja diario con guardado automático en la nube y reinicio a medianoche.
           </p>
         </div>
 
-        {/* Selector de Fecha de Cierre */}
-        <div className="flex items-center gap-2 bg-slate-900 p-1.5 rounded-xl border border-slate-800">
-          <Calendar className="w-4 h-4 text-amber-400 ml-2" />
-          <input
-            type="date"
-            value={fechaCierre}
-            onChange={(e) => setFechaCierre(e.target.value)}
-            className="bg-transparent text-xs sm:text-sm text-white font-mono focus:outline-none pr-2"
-          />
+        {/* Selector de Fecha de Cierre con Accesos Rápidos */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-1 bg-slate-900/90 p-1 rounded-xl border border-slate-800 text-xs">
+            <button
+              type="button"
+              onClick={() => setFechaCierre(fechaActualApp || new Date().toISOString().split('T')[0])}
+              className={`px-2.5 py-1.5 rounded-lg font-bold transition-colors ${
+                esHoy ? 'bg-amber-500 text-slate-950 shadow-sm' : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              Hoy (En Vivo)
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                const d = new Date();
+                d.setDate(d.getDate() - 1);
+                setFechaCierre(d.toISOString().split('T')[0]);
+              }}
+              className={`px-2.5 py-1.5 rounded-lg font-bold transition-colors ${
+                fechaCierre === new Date(Date.now() - 86400000).toISOString().split('T')[0]
+                  ? 'bg-amber-500 text-slate-950 shadow-sm'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              Ayer
+            </button>
+          </div>
+
+          <div className="flex items-center gap-2 bg-slate-900 p-1.5 rounded-xl border border-slate-800">
+            <Calendar className="w-4 h-4 text-amber-400 ml-2" />
+            <input
+              type="date"
+              value={fechaCierre}
+              onChange={(e) => setFechaCierre(e.target.value)}
+              className="bg-transparent text-xs sm:text-sm text-white font-mono focus:outline-none pr-2"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Banner Informativo de Cierre Automático a las 23:59:59 */}
+      <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-500/10 via-slate-900 to-cyan-500/10 border border-amber-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0">
+            <Clock className="w-5 h-5" />
+          </div>
+          <div>
+            <span className="font-bold text-white text-sm flex items-center gap-2">
+              <span>Cierre Automático Programado a las 23:59:59</span>
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                ACTIVO
+              </span>
+            </span>
+            <p className="text-slate-400 text-xs mt-0.5">
+              A las 23:59:59 se archiva el cierre del día actual en el historial. A las 00:00:00 los valores en pantalla se reinician automáticamente a $0.00 para iniciar el nuevo día.
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <span className="text-[11px] font-mono text-slate-300 bg-slate-800/80 px-2.5 py-1 rounded-lg border border-slate-700">
+            Fecha activa: <strong className="text-amber-400">{fechaActualApp}</strong>
+          </span>
         </div>
       </div>
 
