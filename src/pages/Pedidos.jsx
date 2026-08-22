@@ -151,41 +151,6 @@ export default function Pedidos() {
         </div>
       </div>
 
-      {/* Tarjetas de Resumen Rápido */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800">
-          <span className="text-xs font-semibold text-slate-400">Total en Lista</span>
-          <div className="text-2xl sm:text-3xl font-black text-amber-400 font-mono mt-1">
-            {formatearDinero(totalVentas)}
-          </div>
-          <span className="text-[11px] text-slate-500">{pedidosFiltrados.length} pedidos</span>
-        </div>
-
-        <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800">
-          <span className="text-xs font-semibold text-slate-400">Total Efectivo</span>
-          <div className="text-2xl sm:text-3xl font-black text-emerald-400 font-mono mt-1">
-            {formatearDinero(totalEfectivo)}
-          </div>
-          <span className="text-[11px] text-slate-500">Recaudación en caja</span>
-        </div>
-
-        <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800">
-          <span className="text-xs font-semibold text-slate-400">Total Transferencias</span>
-          <div className="text-2xl sm:text-3xl font-black text-cyan-400 font-mono mt-1">
-            {formatearDinero(totalTransferencia)}
-          </div>
-          <span className="text-[11px] text-slate-500">DeUna / Bancos</span>
-        </div>
-
-        <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800">
-          <span className="text-xs font-semibold text-slate-400">Ticket Promedio</span>
-          <div className="text-2xl sm:text-3xl font-black text-white font-mono mt-1">
-            {pedidosFiltrados.length > 0 ? formatearDinero(totalVentas / pedidosFiltrados.length) : '$0.00'}
-          </div>
-          <span className="text-[11px] text-slate-500">Por comanda</span>
-        </div>
-      </div>
-
       {/* Barra de Filtros */}
       <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 grid grid-cols-1 sm:grid-cols-3 gap-3">
         
