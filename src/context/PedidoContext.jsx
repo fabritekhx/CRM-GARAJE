@@ -27,7 +27,7 @@ import {
   SUPABASE_PROJECT_ID,
   SUPABASE_URL
 } from '../supabase/client';
-import { fusionarMesasInteligente } from '../utils/helpers';
+import { fusionarMesasInteligente, calcularUltimoNumeroOrdenDelDia } from '../utils/helpers';
 import confetti from 'canvas-confetti';
 
 const PedidoContext = createContext();
@@ -96,13 +96,17 @@ export const PedidoProvider = ({ children }) => {
     }
   });
 
-  // Consecutivo de orden
+  // Consecutivo de orden diario (inicia en 0 al iniciar el día para que la primera orden sea la #1)
   const [ultimoNumeroOrden, setUltimoNumeroOrden] = useState(() => {
     try {
-      const guardado = localStorage.getItem(STORAGE_NUMERO_ORDEN);
-      return guardado ? parseInt(guardado, 10) : 100;
+      const hoyStr = new Date().toISOString().split('T')[0];
+      const guardadosPedidos = localStorage.getItem(STORAGE_PEDIDOS);
+      const parsedPedidos = guardadosPedidos ? JSON.parse(guardadosPedidos) : [];
+      const guardadasMesas = localStorage.getItem(STORAGE_MESAS);
+      const parsedMesas = guardadasMesas ? JSON.parse(guardadasMesas) : [];
+      return calcularUltimoNumeroOrdenDelDia(hoyStr, parsedPedidos, parsedMesas);
     } catch {
-      return 100;
+      return 0;
     }
   });
 
@@ -259,15 +263,14 @@ export const PedidoProvider = ({ children }) => {
 
       // 2. Cargar mesas activas / pedidos en curso antes de cobrar
       const resMesas = await cargarMesasActivasDesdeSupabase();
+      let mesasActuales = mesas;
       if (resMesas.success && Array.isArray(resMesas.mesas) && resMesas.mesas.length > 0) {
+        mesasActuales = fusionarMesasInteligente(mesas, resMesas.mesas);
         setMesas((current) => {
           const fusionado = fusionarMesasInteligente(current, resMesas.mesas);
           isRemoteSyncRef.current = true;
           return fusionado;
         });
-        if (resMesas.ultimoNumeroOrden) {
-          setUltimoNumeroOrden((prev) => Math.max(prev, resMesas.ultimoNumeroOrden));
-        }
       }
 
       // Marcar carga inicial como completada para habilitar sincronización saliente
@@ -275,13 +278,18 @@ export const PedidoProvider = ({ children }) => {
 
       // 3. Cargar pedidos cobrados desde Supabase
       const resPedidos = await cargarPedidosDesdeSupabase();
+      let pedidosActuales = pedidosHistorial;
       if (resPedidos.success && resPedidos.data.length > 0) {
+        pedidosActuales = resPedidos.data;
         setPedidosHistorial(resPedidos.data);
-        const maxOrden = Math.max(...resPedidos.data.map((p) => p.numeroOrden || 0), 100);
-        setUltimoNumeroOrden((prev) => Math.max(prev, maxOrden));
       }
 
-      // 4. Cargar cierres desde Supabase
+      // 4. Recalcular consecutivo de orden de HOY para empezar en 1 y no saltar números
+      const hoyStr = new Date().toISOString().split('T')[0];
+      const maxOrdenHoy = calcularUltimoNumeroOrdenDelDia(hoyStr, pedidosActuales, mesasActuales);
+      setUltimoNumeroOrden(maxOrdenHoy);
+
+      // 5. Cargar cierres desde Supabase
       const resCierres = await cargarCierresDesdeSupabase();
       if (resCierres.success && resCierres.data.length > 0) {
         setCierresHistorial(resCierres.data);
@@ -491,6 +499,11 @@ export const PedidoProvider = ({ children }) => {
             autoCierreEjecutadoRef.current.add(fechaAnterior);
             realizarCierreCaja(fechaAnterior, true);
           }
+
+          // Reiniciar consecutivo de orden para el nuevo día (empezará en 1)
+          const nuevoMax = calcularUltimoNumeroOrdenDelDia(hoyStr, pedidosHistorial, mesas);
+          setUltimoNumeroOrden(nuevoMax);
+
           return hoyStr;
         }
         return fechaAnterior;
@@ -543,8 +556,11 @@ export const PedidoProvider = ({ children }) => {
     if (!mesa) return;
 
     if (mesa.estado === 'libre' || !mesa.pedidoActual) {
-      // Crear borrador de pedido
-      const nuevoNumOrden = ultimoNumeroOrden + 1;
+      // Calcular siguiente número de orden dinámico para hoy (empieza en 1 y no salta números)
+      const hoyStr = new Date().toISOString().split('T')[0];
+      const ultimoHoy = calcularUltimoNumeroOrdenDelDia(hoyStr, pedidosHistorial, mesas);
+      const nuevoNumOrden = ultimoHoy + 1;
+
       const nuevoPedido = {
         id: `ped_${Date.now()}_m${numeroMesa}`,
         numeroOrden: nuevoNumOrden,
@@ -797,20 +813,30 @@ export const PedidoProvider = ({ children }) => {
     );
   };
 
-  // Cerrar modal de pedido y liberar mesa automáticamente si no tiene ítems
+  // Cerrar modal de pedido y liberar mesa automáticamente si no tiene ítems (recalculando orden)
   const cerrarModalPedido = () => {
     lastLocalMutationTimestampRef.current = Date.now();
     if (mesaSeleccionada) {
-      setMesas((prev) =>
-        prev.map((m) => {
+      setMesas((prev) => {
+        let huboLiberacion = false;
+        const actualizadas = prev.map((m) => {
           if (m.numero === mesaSeleccionada) {
             if (!m.pedidoActual?.productos || m.pedidoActual.productos.length === 0) {
+              huboLiberacion = true;
               return { ...m, estado: 'libre', pedidoActual: null, updatedAt: Date.now() };
             }
           }
           return m;
-        })
-      );
+        });
+
+        if (huboLiberacion) {
+          const hoyStr = new Date().toISOString().split('T')[0];
+          const nuevoMax = calcularUltimoNumeroOrdenDelDia(hoyStr, pedidosHistorial, actualizadas);
+          setUltimoNumeroOrden(nuevoMax);
+        }
+
+        return actualizadas;
+      });
     }
     setIsPedidoModalOpen(false);
     setMesaSeleccionada(null);
@@ -849,7 +875,11 @@ export const PedidoProvider = ({ children }) => {
     const conteo = domiciliosExistentes.length + 1;
     const identificador = `Dom #${conteo}`;
     const idUnico = `dom_${Date.now()}`;
-    const nuevoNumOrden = ultimoNumeroOrden + 1;
+
+    // Calcular consecutivo dinámico de hoy sin saltos
+    const hoyStr = new Date().toISOString().split('T')[0];
+    const ultimoHoy = calcularUltimoNumeroOrdenDelDia(hoyStr, pedidosHistorial, mesas);
+    const nuevoNumOrden = ultimoHoy + 1;
 
     const nombre = nombreCliente && nombreCliente.trim() !== ''
       ? `A Domicilio (${nombreCliente.trim()})`
@@ -889,12 +919,16 @@ export const PedidoProvider = ({ children }) => {
     return nuevoDomicilio;
   };
 
-  // Eliminar una mesa o cuadro de domicilio
+  // Eliminar una mesa o cuadro de domicilio (y recalcular consecutivo si procede)
   const eliminarMesa = (idONumero) => {
     lastLocalMutationTimestampRef.current = Date.now();
-    setMesas((prev) =>
-      prev.filter((m) => m.id !== idONumero && m.numero !== idONumero)
-    );
+    setMesas((prev) => {
+      const actualizadas = prev.filter((m) => m.id !== idONumero && m.numero !== idONumero);
+      const hoyStr = new Date().toISOString().split('T')[0];
+      const nuevoMax = calcularUltimoNumeroOrdenDelDia(hoyStr, pedidosHistorial, actualizadas);
+      setUltimoNumeroOrden(nuevoMax);
+      return actualizadas;
+    });
     if (mesaSeleccionada === idONumero) {
       setIsPedidoModalOpen(false);
       setIsCobroModalOpen(false);
@@ -909,22 +943,29 @@ export const PedidoProvider = ({ children }) => {
     const reset = MESAS_INICIALES.map((m) => ({ ...m, updatedAt: Date.now() }));
     setMesas(reset);
     localStorage.setItem(STORAGE_MESAS, JSON.stringify(reset));
+    const hoyStr = new Date().toISOString().split('T')[0];
+    const nuevoMax = calcularUltimoNumeroOrdenDelDia(hoyStr, pedidosHistorial, reset);
+    setUltimoNumeroOrden(nuevoMax);
     setIsPedidoModalOpen(false);
     setIsCobroModalOpen(false);
     setMesaSeleccionada(null);
     mostrarNotificacion('Todas las mesas han sido liberadas y están vacías', 'info');
   };
 
-  // Cancelar/Vaciar pedido de una mesa
+  // Cancelar/Vaciar pedido de una mesa (recalculando el consecutivo para no saltar números)
   const cancelarPedidoMesa = (numeroMesa) => {
     lastLocalMutationTimestampRef.current = Date.now();
-    setMesas((prev) =>
-      prev.map((m) =>
+    setMesas((prev) => {
+      const actualizadas = prev.map((m) =>
         m.numero === numeroMesa
           ? { ...m, estado: 'libre', pedidoActual: null, updatedAt: Date.now() }
           : m
-      )
-    );
+      );
+      const hoyStr = new Date().toISOString().split('T')[0];
+      const nuevoMax = calcularUltimoNumeroOrdenDelDia(hoyStr, pedidosHistorial, actualizadas);
+      setUltimoNumeroOrden(nuevoMax);
+      return actualizadas;
+    });
     setIsPedidoModalOpen(false);
     setIsCobroModalOpen(false);
     setMesaSeleccionada(null);
@@ -1125,7 +1166,7 @@ export const PedidoProvider = ({ children }) => {
     return cierre;
   };
 
-  // Eliminar un pedido del historial (Supabase + Firestore + Local)
+  // Eliminar un pedido del historial (Supabase + Firestore + Local y recalcular consecutivo)
   const eliminarPedidoHistorial = async (pedidoId) => {
     lastLocalMutationTimestampRef.current = Date.now();
     // 1. Eliminar de Supabase
@@ -1144,9 +1185,15 @@ export const PedidoProvider = ({ children }) => {
       }
     }
 
-    // 3. Eliminar de estado local
-    setPedidosHistorial((prev) => prev.filter((p) => p.id !== pedidoId));
-    mostrarNotificacion('Pedido anulado y eliminado de Supabase exitosamente', 'info');
+    // 3. Eliminar de estado local y recalcular consecutivo
+    setPedidosHistorial((prev) => {
+      const actualizados = prev.filter((p) => p.id !== pedidoId);
+      const hoyStr = new Date().toISOString().split('T')[0];
+      const nuevoMax = calcularUltimoNumeroOrdenDelDia(hoyStr, actualizados, mesas);
+      setUltimoNumeroOrden(nuevoMax);
+      return actualizados;
+    });
+    mostrarNotificacion('Pedido anulado y eliminado exitosamente', 'info');
   };
 
   return (

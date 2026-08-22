@@ -179,7 +179,7 @@ export const cargarMesasActivasDesdeSupabase = async () => {
       return {
         success: true,
         mesas: dataMesas.mesas,
-        ultimoNumeroOrden: dataMesas.ultimo_numero_orden || 100,
+        ultimoNumeroOrden: Number(dataMesas.ultimo_numero_orden) || 0,
         updatedAt: dataMesas.updated_at ? new Date(dataMesas.updated_at).getTime() : Date.now(),
       };
     }
@@ -195,7 +195,7 @@ export const cargarMesasActivasDesdeSupabase = async () => {
       return {
         success: true,
         mesas: dataFallback.productos,
-        ultimoNumeroOrden: dataFallback.numero_orden || 100,
+        ultimoNumeroOrden: Number(dataFallback.numero_orden) || 0,
         updatedAt: dataFallback.fecha ? new Date(dataFallback.fecha).getTime() : Date.now(),
       };
     }

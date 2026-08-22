@@ -680,3 +680,35 @@ export const fusionarMesasInteligente = (locales = [], remotas = []) => {
   return Array.from(mapa.values());
 };
 
+/**
+ * Calcula el número de orden consecutivo más alto usado en el día especificado.
+ * Si no hay órdenes hoy, retorna 0 (para que la siguiente comanda empiece en 1).
+ * Reutiliza automáticamente el consecutivo si la última orden se canceló o eliminó.
+ */
+export const calcularUltimoNumeroOrdenDelDia = (fechaStr, listaPedidos = [], listaMesas = []) => {
+  const hoyStr = fechaStr || new Date().toISOString().split('T')[0];
+
+  // 1. Números de pedidos ya cobrados hoy en el historial
+  const ordenesHistorialHoy = (listaPedidos || [])
+    .filter((p) => {
+      if (!p || p.estado === 'cancelado') return false;
+      const f = typeof p.fecha === 'string' ? p.fecha.split('T')[0] : '';
+      return f === hoyStr;
+    })
+    .map((p) => Number(p.numeroOrden))
+    .filter((n) => !isNaN(n) && n > 0);
+
+  // 2. Números de pedidos actualmente activos en mesas hoy (que tengan comanda)
+  const ordenesMesasActivasHoy = (listaMesas || [])
+    .filter((m) => {
+      if (!m || !m.pedidoActual || !m.pedidoActual.numeroOrden) return false;
+      const f = typeof m.pedidoActual.fecha === 'string' ? m.pedidoActual.fecha.split('T')[0] : '';
+      return f === hoyStr || !f;
+    })
+    .map((m) => Number(m.pedidoActual.numeroOrden))
+    .filter((n) => !isNaN(n) && n > 0);
+
+  const todos = [...ordenesHistorialHoy, ...ordenesMesasActivasHoy];
+  return todos.length > 0 ? Math.max(...todos) : 0;
+};
+
