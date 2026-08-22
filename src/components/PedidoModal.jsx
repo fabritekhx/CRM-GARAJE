@@ -14,7 +14,8 @@ import {
   MessageSquare, 
   Sparkles, 
   ShoppingBag, 
-  Bike 
+  Bike,
+  Cloud 
 } from 'lucide-react';
 import { usePedidos } from '../context/PedidoContext';
 import { formatearDinero, formatearHora } from '../utils/helpers';

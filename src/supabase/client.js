@@ -133,7 +133,7 @@ export const guardarMesasActivasEnSupabase = async (mesas, ultimoNumeroOrden = 1
     const fallbackPayload = {
       id: 'SYS_MESAS_ESTADO_GLOBAL',
       numero_orden: Number(ultimoNumeroOrden) || 100,
-      mesa: 'SISTEMA',
+      mesa: '0', // Usar string numérico '0' para compatibilidad tanto si 'mesa' es TEXT como INTEGER en Postgres
       fecha: new Date().toISOString(),
       total: 0,
       metodo_pago: 'sistema',
@@ -302,6 +302,7 @@ export const cargarPedidosDesdeSupabase = async () => {
     const { data, error } = await supabase
       .from('pedidos')
       .select('*')
+      .neq('id', 'SYS_MESAS_ESTADO_GLOBAL')
       .order('numero_orden', { ascending: false });
 
     if (error) throw error;

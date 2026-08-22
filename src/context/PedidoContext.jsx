@@ -193,7 +193,7 @@ export const PedidoProvider = ({ children }) => {
     // 2. Enviar por Supabase Realtime Channel a otros navegadores/dispositivos
     if (supabaseChannelRef.current) {
       try {
-        supabaseChannelRef.current.send({
+        const payloadData = {
           type: 'broadcast',
           event: 'mesas_actualizadas',
           payload: {
@@ -201,7 +201,16 @@ export const PedidoProvider = ({ children }) => {
             ultimoNumeroOrden: numOrden,
             timestamp: Date.now()
           }
-        });
+        };
+
+        // En versiones recientes de @supabase/supabase-js, si el canal no está en estado 'joined'
+        // o si se requiere envío HTTP confiable, se usa httpSend() para evitar el warning de deprecación de send()
+        if (typeof supabaseChannelRef.current.httpSend === 'function') {
+          supabaseChannelRef.current.httpSend(payloadData).catch(() => {});
+        } else if (typeof supabaseChannelRef.current.send === 'function') {
+          // Si el estado es 'joined' / 'SUBSCRIBED', send() va por websocket sin warning; de lo contrario httpSend si existe
+          supabaseChannelRef.current.send(payloadData);
+        }
       } catch (e) {
         console.warn('Error en broadcast Supabase:', e);
       }
@@ -299,7 +308,7 @@ export const PedidoProvider = ({ children }) => {
     if (supabase) {
       try {
         const channel = supabase.channel('el-garaje-pos-mesas-realtime', {
-          config: { broadcast: { self: false } }
+          config: { broadcast: { self: false, ack: true } }
         });
 
         channel.on('broadcast', { event: 'mesas_actualizadas' }, (event) => {
@@ -313,8 +322,11 @@ export const PedidoProvider = ({ children }) => {
           }
         });
 
-        channel.subscribe();
-        supabaseChannelRef.current = channel;
+        channel.subscribe((status) => {
+          if (status === 'SUBSCRIBED') {
+            supabaseChannelRef.current = channel;
+          }
+        });
       } catch (err) {
         console.warn('Error configurando canal Realtime Supabase:', err);
       }

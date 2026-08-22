@@ -6,6 +6,7 @@ import Mesas from './pages/Mesas';
 import Pedidos from './pages/Pedidos';
 import Cierres from './pages/Cierres';
 import Analisis from './pages/Analisis';
+import ErrorBoundary from './components/ErrorBoundary';
 import { CheckCircle2, AlertCircle, Info, X } from 'lucide-react';
 
 // Componente para renderizar la notificación global (Toast)
@@ -84,10 +85,12 @@ function AppContent() {
 
 export default function App() {
   return (
-    <Router>
-      <PedidoProvider>
-        <AppContent />
-      </PedidoProvider>
-    </Router>
+    <ErrorBoundary>
+      <Router>
+        <PedidoProvider>
+          <AppContent />
+        </PedidoProvider>
+      </Router>
+    </ErrorBoundary>
   );
 }
