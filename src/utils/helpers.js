@@ -603,3 +603,80 @@ export const compartirTicket = async (pedido) => {
   }
 };
 
+/**
+ * Fusiona inteligentemente dos conjuntos de mesas (locales y remotas)
+ * para evitar sobrescrituras destructivas y resolver concurrencia multi-dispositivo.
+ */
+export const fusionarMesasInteligente = (locales = [], remotas = []) => {
+  if (!Array.isArray(remotas) || remotas.length === 0) return locales || [];
+  if (!Array.isArray(locales) || locales.length === 0) return remotas || [];
+
+  const mapa = new Map();
+
+  // 1. Añadir todas las mesas remotas primero
+  remotas.forEach((m) => {
+    if (!m) return;
+    const key = String(m.id || m.numero);
+    mapa.set(key, { ...m });
+  });
+
+  // 2. Evaluar y fusionar con mesas locales
+  locales.forEach((localMesa) => {
+    if (!localMesa) return;
+    const key = String(localMesa.id || localMesa.numero);
+    const remotaMesa = mapa.get(key);
+
+    if (!remotaMesa) {
+      // Mesa creada localmente (ej. domicilio agregado), conservarla
+      mapa.set(key, { ...localMesa });
+      return;
+    }
+
+    const localTienePedido = Boolean(
+      localMesa.pedidoActual &&
+      Array.isArray(localMesa.pedidoActual.productos) &&
+      localMesa.pedidoActual.productos.length > 0
+    );
+
+    const remotaTienePedido = Boolean(
+      remotaMesa.pedidoActual &&
+      Array.isArray(remotaMesa.pedidoActual.productos) &&
+      remotaMesa.pedidoActual.productos.length > 0
+    );
+
+    const localTimestamp = Number(localMesa.updatedAt) || 0;
+    const remotaTimestamp = Number(remotaMesa.updatedAt) || 0;
+
+    // Regla 1: Si la local tiene pedido activo y la remota está vacía (posible nuevo cliente/dispositivo con estado vacío)
+    if (localTienePedido && !remotaTienePedido) {
+      if (remotaTimestamp > localTimestamp) {
+        mapa.set(key, { ...remotaMesa });
+      } else {
+        mapa.set(key, { ...localMesa });
+      }
+      return;
+    }
+
+    // Regla 2: Si la remota tiene pedido activo y la local está vacía (ej. abriendo en móvil por primera vez)
+    if (!localTienePedido && remotaTienePedido) {
+      mapa.set(key, { ...remotaMesa });
+      return;
+    }
+
+    // Regla 3: Si ambas tienen pedido activo, gana la que tenga el timestamp de modificación más reciente
+    if (localTienePedido && remotaTienePedido) {
+      if (localTimestamp > remotaTimestamp) {
+        mapa.set(key, { ...localMesa });
+      } else {
+        mapa.set(key, { ...remotaMesa });
+      }
+      return;
+    }
+
+    // Regla 4: Ambas están libres/vacías
+    mapa.set(key, localTimestamp > remotaTimestamp ? { ...localMesa } : { ...remotaMesa });
+  });
+
+  return Array.from(mapa.values());
+};
+

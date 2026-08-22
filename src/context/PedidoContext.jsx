@@ -27,6 +27,7 @@ import {
   SUPABASE_PROJECT_ID,
   SUPABASE_URL
 } from '../supabase/client';
+import { fusionarMesasInteligente } from '../utils/helpers';
 import confetti from 'canvas-confetti';
 
 const PedidoContext = createContext();
@@ -143,6 +144,12 @@ export const PedidoProvider = ({ children }) => {
   const [sincronizando, setSincronizando] = useState(false);
   const [notificacion, setNotificacion] = useState(null);
 
+  // Identificador único de este cliente/dispositivo para evitar eco en broadcast
+  const clientIdRef = useRef(`client_${Math.random().toString(36).substring(2)}_${Date.now()}`);
+  
+  // Guardia crucial: impide que un dispositivo nuevo (con estado vacío) sobrescriba el servidor al abrirse
+  const hasInitialSyncCompletedRef = useRef(false);
+
   // Referencias para evitar loops infinitos de actualización en tiempo real
   const isRemoteSyncRef = useRef(false);
   const debounceTimerRef = useRef(null);
@@ -181,40 +188,41 @@ export const PedidoProvider = ({ children }) => {
 
   // Función para persistir mesas activas en la nube y notificar a otros navegadores
   const transmitirCambiosMesas = useCallback((nuevasMesas, numOrden) => {
+    // Si aún no hemos completado la carga inicial desde el servidor y no hubo interacción del usuario, NO transmitir
+    if (!hasInitialSyncCompletedRef.current && lastLocalMutationTimestampRef.current === 0) {
+      return;
+    }
+
+    const payloadData = {
+      tipo: 'SYNC_MESAS',
+      mesas: nuevasMesas,
+      ultimoNumeroOrden: numOrden,
+      senderId: clientIdRef.current,
+      timestamp: Date.now()
+    };
+
     // 1. Enviar por canal local de pestañas
     if (localBroadcastChannel) {
       try {
-        localBroadcastChannel.postMessage({
-          tipo: 'SYNC_MESAS',
-          mesas: nuevasMesas,
-          ultimoNumeroOrden: numOrden,
-          timestamp: Date.now()
-        });
+        localBroadcastChannel.postMessage(payloadData);
       } catch (e) {
         console.warn('Error en broadcast local:', e);
       }
     }
 
-    // 2. Enviar por Supabase Realtime Channel a otros navegadores/dispositivos
+    // 2. Enviar por Supabase Realtime Channel a otros dispositivos
     if (supabaseChannelRef.current) {
       try {
-        const payloadData = {
+        const broadcastEvent = {
           type: 'broadcast',
           event: 'mesas_actualizadas',
-          payload: {
-            mesas: nuevasMesas,
-            ultimoNumeroOrden: numOrden,
-            timestamp: Date.now()
-          }
+          payload: payloadData
         };
 
-        // En versiones recientes de @supabase/supabase-js, si el canal no está en estado 'joined'
-        // o si se requiere envío HTTP confiable, se usa httpSend() para evitar el warning de deprecación de send()
         if (typeof supabaseChannelRef.current.httpSend === 'function') {
-          supabaseChannelRef.current.httpSend(payloadData).catch(() => {});
+          supabaseChannelRef.current.httpSend(broadcastEvent).catch(() => {});
         } else if (typeof supabaseChannelRef.current.send === 'function') {
-          // Si el estado es 'joined' / 'SUBSCRIBED', send() va por websocket sin warning; de lo contrario httpSend si existe
-          supabaseChannelRef.current.send(payloadData);
+          supabaseChannelRef.current.send(broadcastEvent);
         }
       } catch (e) {
         console.warn('Error en broadcast Supabase:', e);
@@ -236,7 +244,9 @@ export const PedidoProvider = ({ children }) => {
       isRemoteSyncRef.current = false;
       return;
     }
-    transmitirCambiosMesas(mesas, ultimoNumeroOrden);
+    if (hasInitialSyncCompletedRef.current || lastLocalMutationTimestampRef.current > 0) {
+      transmitirCambiosMesas(mesas, ultimoNumeroOrden);
+    }
   }, [mesas, ultimoNumeroOrden, transmitirCambiosMesas]);
 
   // Cargar datos de Supabase al iniciar o sincronizar silenciosamente
@@ -250,12 +260,18 @@ export const PedidoProvider = ({ children }) => {
       // 2. Cargar mesas activas / pedidos en curso antes de cobrar
       const resMesas = await cargarMesasActivasDesdeSupabase();
       if (resMesas.success && Array.isArray(resMesas.mesas) && resMesas.mesas.length > 0) {
-        isRemoteSyncRef.current = true;
-        setMesas(resMesas.mesas);
+        setMesas((current) => {
+          const fusionado = fusionarMesasInteligente(current, resMesas.mesas);
+          isRemoteSyncRef.current = true;
+          return fusionado;
+        });
         if (resMesas.ultimoNumeroOrden) {
           setUltimoNumeroOrden((prev) => Math.max(prev, resMesas.ultimoNumeroOrden));
         }
       }
+
+      // Marcar carga inicial como completada para habilitar sincronización saliente
+      hasInitialSyncCompletedRef.current = true;
 
       // 3. Cargar pedidos cobrados desde Supabase
       const resPedidos = await cargarPedidosDesdeSupabase();
@@ -300,16 +316,17 @@ export const PedidoProvider = ({ children }) => {
     } catch (error) {
       console.warn('Sincronización automática silenciosa:', error);
     } finally {
+      hasInitialSyncCompletedRef.current = true;
       setSincronizando(false);
     }
   }, [mostrarNotificacion]);
 
   // Configurar listeners en tiempo real y ciclo de sincronización automática continua
   useEffect(() => {
-    // 1. Carga inicial
+    // 1. Carga inicial desde Supabase
     sincronizarConSupabase(false);
 
-    // 2. Suscripción Supabase Realtime Broadcast para sincronización instantánea entre navegadores
+    // 2. Suscripción Supabase Realtime Broadcast para sincronización instantánea entre múltiples dispositivos
     if (supabase) {
       try {
         const channel = supabase.channel('el-garaje-pos-mesas-realtime', {
@@ -318,9 +335,18 @@ export const PedidoProvider = ({ children }) => {
 
         channel.on('broadcast', { event: 'mesas_actualizadas' }, (event) => {
           const payload = event?.payload;
+          // Ignorar ecos del mismo cliente
+          if (payload?.senderId === clientIdRef.current) return;
+
           if (payload && Array.isArray(payload.mesas)) {
-            isRemoteSyncRef.current = true;
-            setMesas(payload.mesas);
+            setMesas((current) => {
+              const fusionado = fusionarMesasInteligente(current, payload.mesas);
+              if (JSON.stringify(current) !== JSON.stringify(fusionado)) {
+                isRemoteSyncRef.current = true;
+                return fusionado;
+              }
+              return current;
+            });
             if (payload.ultimoNumeroOrden) {
               setUltimoNumeroOrden((prev) => Math.max(prev, payload.ultimoNumeroOrden));
             }
@@ -340,13 +366,20 @@ export const PedidoProvider = ({ children }) => {
     // 3. Listener BroadcastChannel local (múltiples pestañas en el mismo navegador)
     if (localBroadcastChannel) {
       localBroadcastChannel.onmessage = (event) => {
+        if (event.data?.senderId === clientIdRef.current) return;
+
         if (event.data?.tipo === 'SYNC_MESAS' && Array.isArray(event.data.mesas)) {
-          // Si el usuario acaba de interactuar localmente, ignorar para evitar parpadeos o carreras
-          if (Date.now() - lastLocalMutationTimestampRef.current < 3500) {
+          if (Date.now() - lastLocalMutationTimestampRef.current < 2500) {
             return;
           }
-          isRemoteSyncRef.current = true;
-          setMesas(event.data.mesas);
+          setMesas((current) => {
+            const fusionado = fusionarMesasInteligente(current, event.data.mesas);
+            if (JSON.stringify(current) !== JSON.stringify(fusionado)) {
+              isRemoteSyncRef.current = true;
+              return fusionado;
+            }
+            return current;
+          });
           if (event.data.ultimoNumeroOrden) {
             setUltimoNumeroOrden((prev) => Math.max(prev, event.data.ultimoNumeroOrden));
           }
@@ -356,15 +389,16 @@ export const PedidoProvider = ({ children }) => {
 
     // 4. Listener cuando el usuario cambia de ventana o regresa a la pestaña (Visibility / Focus)
     const handleFocus = () => {
-      if (Date.now() - lastLocalMutationTimestampRef.current < 3500) {
+      if (Date.now() - lastLocalMutationTimestampRef.current < 2500) {
         return;
       }
       cargarMesasActivasDesdeSupabase().then((res) => {
         if (res.success && Array.isArray(res.mesas) && res.mesas.length > 0) {
           setMesas((current) => {
-            if (JSON.stringify(current) !== JSON.stringify(res.mesas)) {
+            const fusionado = fusionarMesasInteligente(current, res.mesas);
+            if (JSON.stringify(current) !== JSON.stringify(fusionado)) {
               isRemoteSyncRef.current = true;
-              return res.mesas;
+              return fusionado;
             }
             return current;
           });
@@ -384,19 +418,18 @@ export const PedidoProvider = ({ children }) => {
 
     // 5. Polling automático en segundo plano para sincronizar mesas y pedidos abiertos
     const pollingMesasInterval = setInterval(async () => {
-      // Si hubo mutación local reciente, no pisar el estado con polling
-      if (Date.now() - lastLocalMutationTimestampRef.current < 3500) {
+      // Si hubo mutación local reciente, respetar la interacción del usuario
+      if (Date.now() - lastLocalMutationTimestampRef.current < 2500) {
         return;
       }
       try {
         const res = await cargarMesasActivasDesdeSupabase();
         if (res.success && Array.isArray(res.mesas) && res.mesas.length > 0) {
           setMesas((current) => {
-            const currentStr = JSON.stringify(current);
-            const remoteStr = JSON.stringify(res.mesas);
-            if (currentStr !== remoteStr) {
+            const fusionado = fusionarMesasInteligente(current, res.mesas);
+            if (JSON.stringify(current) !== JSON.stringify(fusionado)) {
               isRemoteSyncRef.current = true;
-              return res.mesas;
+              return fusionado;
             }
             return current;
           });
@@ -424,7 +457,7 @@ export const PedidoProvider = ({ children }) => {
       } catch {
         // Silencioso
       }
-    }, 6000);
+    }, 5000);
 
     return () => {
       window.removeEventListener('focus', handleFocus);
@@ -526,7 +559,7 @@ export const PedidoProvider = ({ children }) => {
       setMesas((prev) =>
         prev.map((m) =>
           m.numero === numeroMesa
-            ? { ...m, estado: 'ocupada', pedidoActual: nuevoPedido }
+            ? { ...m, estado: 'ocupada', pedidoActual: nuevoPedido, updatedAt: Date.now() }
             : m
         )
       );
@@ -605,6 +638,7 @@ export const PedidoProvider = ({ children }) => {
         return {
           ...m,
           estado: 'ocupada',
+          updatedAt: Date.now(),
           pedidoActual: {
             ...pedido,
             productos: nuevosProductos,
@@ -645,6 +679,7 @@ export const PedidoProvider = ({ children }) => {
 
         return {
           ...m,
+          updatedAt: Date.now(),
           pedidoActual: {
             ...m.pedidoActual,
             productos: nuevosProductos,
@@ -669,6 +704,7 @@ export const PedidoProvider = ({ children }) => {
 
         return {
           ...m,
+          updatedAt: Date.now(),
           pedidoActual: {
             ...m.pedidoActual,
             productos: nuevosProductos,
@@ -698,6 +734,7 @@ export const PedidoProvider = ({ children }) => {
 
         return {
           ...m,
+          updatedAt: Date.now(),
           pedidoActual: {
             ...m.pedidoActual,
             productos: nuevosProductos,
@@ -729,6 +766,7 @@ export const PedidoProvider = ({ children }) => {
 
         return {
           ...m,
+          updatedAt: Date.now(),
           pedidoActual: {
             ...m.pedidoActual,
             productos: nuevosProductos,
@@ -749,6 +787,7 @@ export const PedidoProvider = ({ children }) => {
         if (m.numero !== mesaSeleccionada || !m.pedidoActual) return m;
         return {
           ...m,
+          updatedAt: Date.now(),
           pedidoActual: {
             ...m.pedidoActual,
             notas,
@@ -766,7 +805,7 @@ export const PedidoProvider = ({ children }) => {
         prev.map((m) => {
           if (m.numero === mesaSeleccionada) {
             if (!m.pedidoActual?.productos || m.pedidoActual.productos.length === 0) {
-              return { ...m, estado: 'libre', pedidoActual: null };
+              return { ...m, estado: 'libre', pedidoActual: null, updatedAt: Date.now() };
             }
           }
           return m;
@@ -795,6 +834,7 @@ export const PedidoProvider = ({ children }) => {
       nombre,
       estado: 'libre',
       pedidoActual: null,
+      updatedAt: Date.now(),
     };
 
     setMesas((prev) => [...prev, nuevaMesa]);
@@ -838,6 +878,7 @@ export const PedidoProvider = ({ children }) => {
       nombre,
       estado: 'ocupada',
       pedidoActual: nuevoPedido,
+      updatedAt: Date.now(),
     };
 
     setUltimoNumeroOrden(nuevoNumOrden);
@@ -865,8 +906,9 @@ export const PedidoProvider = ({ children }) => {
   // Liberar todas las mesas activas de una sola vez
   const liberarTodasLasMesas = () => {
     lastLocalMutationTimestampRef.current = Date.now();
-    setMesas(MESAS_INICIALES);
-    localStorage.setItem(STORAGE_MESAS, JSON.stringify(MESAS_INICIALES));
+    const reset = MESAS_INICIALES.map((m) => ({ ...m, updatedAt: Date.now() }));
+    setMesas(reset);
+    localStorage.setItem(STORAGE_MESAS, JSON.stringify(reset));
     setIsPedidoModalOpen(false);
     setIsCobroModalOpen(false);
     setMesaSeleccionada(null);
@@ -879,7 +921,7 @@ export const PedidoProvider = ({ children }) => {
     setMesas((prev) =>
       prev.map((m) =>
         m.numero === numeroMesa
-          ? { ...m, estado: 'libre', pedidoActual: null }
+          ? { ...m, estado: 'libre', pedidoActual: null, updatedAt: Date.now() }
           : m
       )
     );
@@ -964,7 +1006,7 @@ export const PedidoProvider = ({ children }) => {
         })
         .map((m) =>
           m.numero === mesaSeleccionada || m.id === mesaSeleccionada
-            ? { ...m, estado: 'libre', pedidoActual: null }
+            ? { ...m, estado: 'libre', pedidoActual: null, updatedAt: Date.now() }
             : m
         )
     );
