@@ -1,7 +1,7 @@
 /**
  * Contexto global de Pedidos, Mesas, Supabase y Firestore para El Garaje POS
  */
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { 
   collection, 
   doc, 
@@ -20,6 +20,8 @@ import {
   guardarCierreEnSupabase, 
   cargarPedidosDesdeSupabase, 
   cargarCierresDesdeSupabase,
+  guardarMesasActivasEnSupabase,
+  cargarMesasActivasDesdeSupabase,
   probarConexionSupabase,
   SUPABASE_PROJECT_NAME,
   SUPABASE_PROJECT_ID,
@@ -35,6 +37,11 @@ const STORAGE_PEDIDOS = 'el_garaje_pedidos_v1';
 const STORAGE_CIERRES = 'el_garaje_cierres_v1';
 const STORAGE_NUMERO_ORDEN = 'el_garaje_consecutivo_orden_v1';
 const STORAGE_DIA = 'el_garaje_dia_seleccionado_v1';
+
+// Canal local para sincronización inmediata entre pestañas del mismo navegador
+const localBroadcastChannel = typeof window !== 'undefined' && 'BroadcastChannel' in window 
+  ? new BroadcastChannel('el_garaje_pos_sync') 
+  : null;
 
 // Estado inicial de las 7 mesas + A Domicilio (todas vacías y listas)
 const MESAS_INICIALES = [
@@ -58,7 +65,6 @@ export const PedidoProvider = ({ children }) => {
       if (!Array.isArray(parsed) || parsed.length === 0) return MESAS_INICIALES;
 
       return parsed.map((m) => {
-        // Si no tiene productos válidos en pedido, iniciar libre
         if (!m.pedidoActual || !m.pedidoActual.productos || m.pedidoActual.productos.length === 0) {
           return { ...m, estado: 'libre', pedidoActual: null };
         }
@@ -137,6 +143,11 @@ export const PedidoProvider = ({ children }) => {
   const [sincronizando, setSincronizando] = useState(false);
   const [notificacion, setNotificacion] = useState(null);
 
+  // Referencias para evitar loops infinitos de actualización en tiempo real
+  const isRemoteSyncRef = useRef(false);
+  const debounceTimerRef = useRef(null);
+  const supabaseChannelRef = useRef(null);
+
   // Guardar en localStorage automáticamente ante cambios locales
   useEffect(() => {
     localStorage.setItem(STORAGE_MESAS, JSON.stringify(mesas));
@@ -163,6 +174,57 @@ export const PedidoProvider = ({ children }) => {
     }, 4000);
   }, []);
 
+  // Función para persistir mesas activas en la nube y notificar a otros navegadores
+  const transmitirCambiosMesas = useCallback((nuevasMesas, numOrden) => {
+    // 1. Enviar por canal local de pestañas
+    if (localBroadcastChannel) {
+      try {
+        localBroadcastChannel.postMessage({
+          tipo: 'SYNC_MESAS',
+          mesas: nuevasMesas,
+          ultimoNumeroOrden: numOrden,
+          timestamp: Date.now()
+        });
+      } catch (e) {
+        console.warn('Error en broadcast local:', e);
+      }
+    }
+
+    // 2. Enviar por Supabase Realtime Channel a otros navegadores/dispositivos
+    if (supabaseChannelRef.current) {
+      try {
+        supabaseChannelRef.current.send({
+          type: 'broadcast',
+          event: 'mesas_actualizadas',
+          payload: {
+            mesas: nuevasMesas,
+            ultimoNumeroOrden: numOrden,
+            timestamp: Date.now()
+          }
+        });
+      } catch (e) {
+        console.warn('Error en broadcast Supabase:', e);
+      }
+    }
+
+    // 3. Persistir en la base de datos de Supabase con debounce
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
+    debounceTimerRef.current = setTimeout(async () => {
+      await guardarMesasActivasEnSupabase(nuevasMesas, numOrden);
+    }, 400);
+  }, []);
+
+  // Sincronizar automáticamente cuando 'mesas' o 'ultimoNumeroOrden' cambian por acción local
+  useEffect(() => {
+    if (isRemoteSyncRef.current) {
+      isRemoteSyncRef.current = false;
+      return;
+    }
+    transmitirCambiosMesas(mesas, ultimoNumeroOrden);
+  }, [mesas, ultimoNumeroOrden, transmitirCambiosMesas]);
+
   // Cargar datos de Supabase al iniciar o sincronizar
   const sincronizarConSupabase = useCallback(async (mostrarMensaje = true) => {
     setSincronizando(true);
@@ -171,21 +233,31 @@ export const PedidoProvider = ({ children }) => {
       const test = await probarConexionSupabase();
       setIsSupabaseConnected(test.conectado);
 
-      // 2. Cargar pedidos desde Supabase
+      // 2. Cargar mesas activas / pedidos en curso antes de cobrar
+      const resMesas = await cargarMesasActivasDesdeSupabase();
+      if (resMesas.success && Array.isArray(resMesas.mesas) && resMesas.mesas.length > 0) {
+        isRemoteSyncRef.current = true;
+        setMesas(resMesas.mesas);
+        if (resMesas.ultimoNumeroOrden) {
+          setUltimoNumeroOrden((prev) => Math.max(prev, resMesas.ultimoNumeroOrden));
+        }
+      }
+
+      // 3. Cargar pedidos cobrados desde Supabase
       const resPedidos = await cargarPedidosDesdeSupabase();
       if (resPedidos.success && resPedidos.data.length > 0) {
         setPedidosHistorial(resPedidos.data);
         const maxOrden = Math.max(...resPedidos.data.map((p) => p.numeroOrden || 0), 100);
-        setUltimoNumeroOrden(maxOrden);
+        setUltimoNumeroOrden((prev) => Math.max(prev, maxOrden));
       }
 
-      // 3. Cargar cierres desde Supabase
+      // 4. Cargar cierres desde Supabase
       const resCierres = await cargarCierresDesdeSupabase();
       if (resCierres.success && resCierres.data.length > 0) {
         setCierresHistorial(resCierres.data);
       }
 
-      // 4. Cargar de Firestore si está configurado como backup
+      // 5. Cargar de Firestore si está configurado como backup
       if (db && isFirebaseConfigured()) {
         try {
           const pedidosRef = collection(db, 'pedidos');
@@ -209,21 +281,105 @@ export const PedidoProvider = ({ children }) => {
       }
 
       if (mostrarMensaje) {
-        mostrarNotificacion('Conexión con Supabase ("El Garaje Calacaleño") sincronizada', 'success');
+        mostrarNotificacion('Conexión y pedidos abiertos sincronizados con Supabase', 'success');
       }
     } catch (error) {
       console.error('Error sincronizando:', error);
       if (mostrarMensaje) {
-        mostrarNotificacion('Trabajando en modo local (los datos se guardan en el navegador y se sincronizarán)', 'info');
+        mostrarNotificacion('Trabajando en modo local (los datos se sincronizarán al conectarse)', 'info');
       }
     } finally {
       setSincronizando(false);
     }
   }, [mostrarNotificacion]);
 
+  // Configurar listeners en tiempo real (Supabase Realtime Channel + BroadcastChannel + Window Focus)
   useEffect(() => {
+    // 1. Carga inicial
     sincronizarConSupabase(false);
+
+    // 2. Suscripción Supabase Realtime Broadcast para sincronización instantánea entre navegadores
+    if (supabase) {
+      try {
+        const channel = supabase.channel('el-garaje-pos-mesas-realtime', {
+          config: { broadcast: { self: false } }
+        });
+
+        channel.on('broadcast', { event: 'mesas_actualizadas' }, (event) => {
+          const payload = event?.payload;
+          if (payload && Array.isArray(payload.mesas)) {
+            isRemoteSyncRef.current = true;
+            setMesas(payload.mesas);
+            if (payload.ultimoNumeroOrden) {
+              setUltimoNumeroOrden((prev) => Math.max(prev, payload.ultimoNumeroOrden));
+            }
+          }
+        });
+
+        channel.subscribe();
+        supabaseChannelRef.current = channel;
+      } catch (err) {
+        console.warn('Error configurando canal Realtime Supabase:', err);
+      }
+    }
+
+    // 3. Listener BroadcastChannel local (múltiples pestañas en el mismo navegador)
+    if (localBroadcastChannel) {
+      localBroadcastChannel.onmessage = (event) => {
+        if (event.data?.tipo === 'SYNC_MESAS' && Array.isArray(event.data.mesas)) {
+          isRemoteSyncRef.current = true;
+          setMesas(event.data.mesas);
+          if (event.data.ultimoNumeroOrden) {
+            setUltimoNumeroOrden((prev) => Math.max(prev, event.data.ultimoNumeroOrden));
+          }
+        }
+      };
+    }
+
+    // 4. Listener cuando el usuario cambia de ventana o regresa a la pestaña (Visibility / Focus)
+    const handleFocus = () => {
+      // Re-sincronizar mesas abiertas desde Supabase para asegurar datos frescos
+      cargarMesasActivasDesdeSupabase().then((res) => {
+        if (res.success && Array.isArray(res.mesas) && res.mesas.length > 0) {
+          isRemoteSyncRef.current = true;
+          setMesas(res.mesas);
+          if (res.ultimoNumeroOrden) {
+            setUltimoNumeroOrden((prev) => Math.max(prev, res.ultimoNumeroOrden));
+          }
+        }
+      });
+    };
+
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') {
+        handleFocus();
+      }
+    });
+
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+      if (supabaseChannelRef.current) {
+        supabase.removeChannel(supabaseChannelRef.current);
+      }
+    };
   }, [sincronizarConSupabase]);
+
+  // Guardado manual explícito con confirmación al usuario
+  const guardarComandaEnNube = async () => {
+    setSincronizando(true);
+    try {
+      await guardarMesasActivasEnSupabase(mesas, ultimoNumeroOrden);
+      transmitirCambiosMesas(mesas, ultimoNumeroOrden);
+      mostrarNotificacion('Comanda guardada y sincronizada en tiempo real con otros navegadores', 'success');
+      return true;
+    } catch (e) {
+      mostrarNotificacion('Guardado localmente (se sincronizará en la nube)', 'info');
+      return false;
+    } finally {
+      setSincronizando(false);
+    }
+  };
 
   // Abrir mesa para ver o crear pedido
   const abrirMesa = (numeroMesa) => {
@@ -663,7 +819,6 @@ export const PedidoProvider = ({ children }) => {
       prev
         .filter((m) => {
           const esEstaMesa = m.numero === mesaSeleccionada || m.id === mesaSeleccionada;
-          // Si es domicilio y fue cobrado, se quita el cuadro del salón
           if (esEstaMesa && m.tipo === 'domicilio') {
             return false;
           }
@@ -695,7 +850,7 @@ export const PedidoProvider = ({ children }) => {
     setMesaSeleccionada(null);
     setIsTicketModalOpen(true);
 
-    mostrarNotificacion(`¡Pedido #${pedidoPagado.numeroOrden} cobrado y guardado en Supabase!`, 'success');
+    mostrarNotificacion(`¡Pedido #${pedidoPagado.numeroOrden} cobrado y sincronizado en Supabase!`, 'success');
   };
 
   // Realizar cierre de caja diario
@@ -844,6 +999,7 @@ export const PedidoProvider = ({ children }) => {
         actualizarNotasItem,
         actualizarPrecioItem,
         actualizarNotasPedido,
+        guardarComandaEnNube,
         cerrarModalPedido,
         agregarMesa,
         agregarDomicilio,

@@ -47,7 +47,7 @@ export const SUPABASE_SQL_SCHEMA = `-- Copia y pega este script en el SQL Editor
 CREATE TABLE IF NOT EXISTS public.pedidos (
     id TEXT PRIMARY KEY,
     numero_orden INTEGER NOT NULL,
-    mesa INTEGER NOT NULL,
+    mesa TEXT NOT NULL,
     fecha TIMESTAMPTZ DEFAULT NOW(),
     total NUMERIC(10, 2) NOT NULL,
     metodo_pago TEXT NOT NULL DEFAULT 'efectivo', -- 'efectivo', 'transferencia', 'mixto', 'dividido'
@@ -58,7 +58,7 @@ CREATE TABLE IF NOT EXISTS public.pedidos (
     banco TEXT DEFAULT '',
     comprobante TEXT DEFAULT '',
     notas TEXT DEFAULT '',
-    estado TEXT DEFAULT 'pagado',
+    estado TEXT DEFAULT 'pagado', -- 'activo' o 'pagado'
     desglose_pagos JSONB DEFAULT '[]'::jsonb,
     productos JSONB DEFAULT '[]'::jsonb,
     created_at TIMESTAMPTZ DEFAULT NOW()
@@ -76,9 +76,18 @@ CREATE TABLE IF NOT EXISTS public.cierres (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 3. Habilitar RLS con acceso público (anon) para lectura y escritura desde el POS
+-- 3. Tabla de Estado de Mesas en Curso (Sincronización en tiempo real y multidispositivo)
+CREATE TABLE IF NOT EXISTS public.mesas_activas (
+    id TEXT PRIMARY KEY DEFAULT 'estado_actual',
+    mesas JSONB NOT NULL DEFAULT '[]'::jsonb,
+    ultimo_numero_orden INTEGER DEFAULT 100,
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 4. Habilitar RLS con acceso público (anon) para lectura y escritura desde el POS
 ALTER TABLE public.pedidos ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.cierres ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.mesas_activas ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Permitir todo a pedidos para POS" ON public.pedidos
     FOR ALL
@@ -89,7 +98,112 @@ CREATE POLICY "Permitir todo a cierres para POS" ON public.cierres
     FOR ALL
     USING (true)
     WITH CHECK (true);
+
+CREATE POLICY "Permitir todo a mesas_activas para POS" ON public.mesas_activas
+    FOR ALL
+    USING (true)
+    WITH CHECK (true);
 `;
+
+/**
+ * Guarda el estado actual de las mesas abiertas y comandas en curso en Supabase
+ * para sincronizar inmediatamente con otros navegadores y dispositivos.
+ */
+export const guardarMesasActivasEnSupabase = async (mesas, ultimoNumeroOrden = 100) => {
+  if (!supabase) return { success: false, error: 'Supabase no inicializado' };
+
+  try {
+    const payload = {
+      id: 'estado_actual',
+      mesas: mesas || [],
+      ultimo_numero_orden: Number(ultimoNumeroOrden) || 100,
+      updated_at: new Date().toISOString(),
+    };
+
+    // Intentar primero en la tabla dedicada 'mesas_activas'
+    const { data, error } = await supabase
+      .from('mesas_activas')
+      .upsert(payload, { onConflict: 'id' });
+
+    if (!error) {
+      return { success: true, data };
+    }
+
+    // Fallback: Si 'mesas_activas' aún no se crea, guardar en 'pedidos' como registro de sistema
+    const fallbackPayload = {
+      id: 'SYS_MESAS_ESTADO_GLOBAL',
+      numero_orden: Number(ultimoNumeroOrden) || 100,
+      mesa: 'SISTEMA',
+      fecha: new Date().toISOString(),
+      total: 0,
+      metodo_pago: 'sistema',
+      monto_efectivo: 0,
+      monto_transferencia: 0,
+      monto_recibido: 0,
+      cambio: 0,
+      banco: '',
+      comprobante: '',
+      notas: 'ESTADO_GLOBAL_MESAS_EN_CURSO',
+      estado: 'activo',
+      desglose_pagos: [],
+      productos: mesas || [],
+    };
+
+    const { error: fallbackError } = await supabase
+      .from('pedidos')
+      .upsert(fallbackPayload, { onConflict: 'id' });
+
+    if (fallbackError) throw fallbackError;
+    return { success: true };
+  } catch (err) {
+    console.warn('Supabase: aviso al sincronizar mesas activas en la nube:', err.message || err);
+    return { success: false, error: err.message || err };
+  }
+};
+
+/**
+ * Carga el estado de las mesas activas y pedidos en curso desde Supabase
+ */
+export const cargarMesasActivasDesdeSupabase = async () => {
+  if (!supabase) return { success: false, mesas: null };
+
+  try {
+    // 1. Intentar cargar desde 'mesas_activas'
+    const { data: dataMesas, error: errorMesas } = await supabase
+      .from('mesas_activas')
+      .select('*')
+      .eq('id', 'estado_actual')
+      .maybeSingle();
+
+    if (!errorMesas && dataMesas && Array.isArray(dataMesas.mesas) && dataMesas.mesas.length > 0) {
+      return {
+        success: true,
+        mesas: dataMesas.mesas,
+        ultimoNumeroOrden: dataMesas.ultimo_numero_orden || 100,
+      };
+    }
+
+    // 2. Intentar fallback desde 'pedidos' con id 'SYS_MESAS_ESTADO_GLOBAL'
+    const { data: dataFallback, error: errorFallback } = await supabase
+      .from('pedidos')
+      .select('*')
+      .eq('id', 'SYS_MESAS_ESTADO_GLOBAL')
+      .maybeSingle();
+
+    if (!errorFallback && dataFallback && Array.isArray(dataFallback.productos) && dataFallback.productos.length > 0) {
+      return {
+        success: true,
+        mesas: dataFallback.productos,
+        ultimoNumeroOrden: dataFallback.numero_orden || 100,
+      };
+    }
+
+    return { success: false, mesas: null };
+  } catch (err) {
+    console.warn('Supabase: aviso al cargar mesas activas (se usará local):', err.message || err);
+    return { success: false, mesas: null, error: err.message || err };
+  }
+};
 
 /**
  * Guarda un pedido en la tabla 'pedidos' de Supabase
