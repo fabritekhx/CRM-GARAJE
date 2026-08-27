@@ -65,8 +65,24 @@ export default function Pedidos() {
   });
   const [fechaFin, setFechaFin] = useState(() => new Date().toISOString().split('T')[0]);
 
-  // Dirección de ordenamiento: 'asc' (Primero al Último / Orden #1 primero) | 'desc' (Último al Primero / Más reciente primero)
-  const [ordenDireccion, setOrdenDireccion] = useState('asc');
+  // Dirección de ordenamiento persistente: 'asc' (Primero al Último) | 'desc' (Último al Primero)
+  const [ordenDireccion, setOrdenDireccion] = useState(() => {
+    try {
+      const guardado = localStorage.getItem('el_garaje_orden_direccion_pedidos');
+      return guardado === 'desc' ? 'desc' : 'asc';
+    } catch {
+      return 'asc';
+    }
+  });
+
+  const cambiarOrdenDireccion = (nuevaDireccion) => {
+    setOrdenDireccion(nuevaDireccion);
+    try {
+      localStorage.setItem('el_garaje_orden_direccion_pedidos', nuevaDireccion);
+    } catch {
+      // ignore
+    }
+  };
 
   const [pedidoAEliminar, setPedidoAEliminar] = useState(null);
 
@@ -548,7 +564,7 @@ export default function Pedidos() {
 
               <button
                 type="button"
-                onClick={() => setOrdenDireccion('asc')}
+                onClick={() => cambiarOrdenDireccion('asc')}
                 className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
                   ordenDireccion === 'asc'
                     ? 'bg-amber-500 text-slate-950 shadow-sm shadow-amber-500/20 font-black'
@@ -562,7 +578,7 @@ export default function Pedidos() {
 
               <button
                 type="button"
-                onClick={() => setOrdenDireccion('desc')}
+                onClick={() => cambiarOrdenDireccion('desc')}
                 className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
                   ordenDireccion === 'desc'
                     ? 'bg-amber-500 text-slate-950 shadow-sm shadow-amber-500/20 font-black'
