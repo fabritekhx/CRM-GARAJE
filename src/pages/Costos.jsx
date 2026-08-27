@@ -106,7 +106,7 @@ export default function Costos() {
   // Filtrar pedidos según fecha seleccionada
   const pedidosFiltrados = useMemo(() => {
     return pedidosHistorial.filter((p) => {
-      if (p.estado === 'cancelado') return false;
+      if (!p || p.estado === 'cancelado' || p.estado === 'config' || String(p.id).startsWith('SYS_')) return false;
       const fechaP = typeof p.fecha === 'string' ? p.fecha.split('T')[0] : '';
       
       if (modoFecha === 'dia') {
@@ -122,7 +122,8 @@ export default function Costos() {
   const ventasPorProducto = useMemo(() => {
     const mapa = {};
     pedidosFiltrados.forEach((p) => {
-      (p.productos || []).forEach((item) => {
+      const productosLista = Array.isArray(p?.productos) ? p.productos : [];
+      productosLista.forEach((item) => {
         const id = item.productoId || item.nombre;
         const cant = Number(item.cantidad) || 1;
         const precio = Number(item.precioUnitario) || 0;

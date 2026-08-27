@@ -102,7 +102,8 @@ export const calcularMetricasReporte = (pedidos = [], costosPersonalizados = nul
     }
 
     // Iterar productos
-    (p.productos || []).forEach((item) => {
+    const prodsList = Array.isArray(p?.productos) ? p.productos : [];
+    prodsList.forEach((item) => {
       const cant = Number(item.cantidad) || 1;
       const pVenta = Number(item.precioUnitario) || 0;
       const costoUnit = obtenerCostoUnitario(item.productoId, pVenta, costosMap);

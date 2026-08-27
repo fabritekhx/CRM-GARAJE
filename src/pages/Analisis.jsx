@@ -107,7 +107,7 @@ export default function Analisis() {
   // Filtrado estricto de pedidos según el modo seleccionado
   const pedidosFiltrados = useMemo(() => {
     return pedidosHistorial.filter((p) => {
-      if (p.estado === 'cancelado') return false;
+      if (!p || p.estado === 'cancelado' || p.estado === 'config' || String(p.id).startsWith('SYS_')) return false;
 
       // Filtro por método de pago
       if (filtroMetodo !== 'todos' && p.metodoPago !== filtroMetodo) {
@@ -228,7 +228,8 @@ export default function Analisis() {
   const rankingProductos = useMemo(() => {
     const conteo = {};
     pedidosFiltrados.forEach((p) => {
-      (p.productos || []).forEach((prod) => {
+      const prods = Array.isArray(p?.productos) ? p.productos : [];
+      prods.forEach((prod) => {
         const key = `${prod.nombre}${prod.variante ? ` (${prod.variante})` : ''}`;
         if (!conteo[key]) {
           conteo[key] = {

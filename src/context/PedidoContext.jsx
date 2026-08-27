@@ -97,7 +97,14 @@ export const PedidoProvider = ({ children }) => {
   const [pedidosHistorial, setPedidosHistorial] = useState(() => {
     try {
       const guardados = localStorage.getItem(STORAGE_PEDIDOS);
-      return guardados ? JSON.parse(guardados) : [];
+      const parsed = guardados ? JSON.parse(guardados) : [];
+      if (!Array.isArray(parsed)) return [];
+      return parsed
+        .filter((p) => p && !String(p.id).startsWith('SYS_') && p.estado !== 'config')
+        .map((p) => ({
+          ...p,
+          productos: Array.isArray(p.productos) ? p.productos : [],
+        }));
     } catch {
       return [];
     }

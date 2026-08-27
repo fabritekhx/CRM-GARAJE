@@ -45,6 +45,7 @@ export default function Cierres() {
   // Calcular métricas en vivo para la fecha seleccionada
   const resumenVivo = useMemo(() => {
     const pedidosDelDia = pedidosHistorial.filter((p) => {
+      if (!p || p.estado === 'cancelado' || p.estado === 'config' || String(p.id).startsWith('SYS_')) return false;
       const fechaP = typeof p.fecha === 'string' ? p.fecha.split('T')[0] : '';
       return fechaP === fechaCierre && p.estado === 'pagado';
     });
@@ -66,7 +67,8 @@ export default function Cierres() {
         totalEfectivo += tot;
       }
 
-      (p.productos || []).forEach((item) => {
+      const lista = Array.isArray(p?.productos) ? p.productos : [];
+      lista.forEach((item) => {
         const key = `${item.nombre}${item.variante ? ` (${item.variante})` : ''}`;
         conteo[key] = (conteo[key] || 0) + (Number(item.cantidad) || 1);
       });

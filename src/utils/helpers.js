@@ -121,7 +121,8 @@ export const exportarACSV = (datos, nombreArchivo = 'el_garaje_ventas.csv') => {
 
     const rows = datos.map((p) => {
       const fechaStr = formatearFecha(p.fecha || p.createdAt, 'yyyy-MM-dd HH:mm:ss');
-      const productosStr = (p.productos || [])
+      const prods = Array.isArray(p?.productos) ? p.productos : [];
+      const productosStr = prods
         .map((prod) => `${prod.cantidad}x ${prod.nombre} (${prod.variante || 'Normal'})`)
         .join(' | ');
 
@@ -562,7 +563,8 @@ export const generarTextoTicketWhatsApp = (pedido) => {
   texto += `--------------------------------\n`;
   texto += `*DETALLE DEL CONSUMO:*\n`;
 
-  (pedido.productos || []).forEach((item) => {
+  const itemsDetalle = Array.isArray(pedido?.productos) ? pedido.productos : [];
+  itemsDetalle.forEach((item) => {
     const subtotal = (Number(item.precioUnitario) || 0) * (Number(item.cantidad) || 1);
     const varianteStr = item.variante ? ` (${item.variante})` : '';
     texto += `• ${item.cantidad}x ${item.nombre}${varianteStr} ➔ *${formatearDinero(subtotal)}*\n`;

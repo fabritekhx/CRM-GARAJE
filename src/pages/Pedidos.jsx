@@ -112,6 +112,8 @@ export default function Pedidos() {
   // Filtrar pedidos según fecha, método de pago y texto de búsqueda
   const pedidosFiltrados = useMemo(() => {
     return pedidosHistorial.filter((p) => {
+      if (!p || p.estado === 'cancelado' || p.estado === 'config' || String(p.id).startsWith('SYS_')) return false;
+
       // 1. Filtro por Fecha
       const fechaP = typeof p.fecha === 'string' ? p.fecha.split('T')[0] : '';
       let matchFecha = true;
@@ -227,7 +229,8 @@ export default function Pedidos() {
   }, 0);
 
   const totalPlatosVendidos = pedidosFiltrados.reduce((sum, p) => {
-    return sum + (p.productos || []).reduce((sub, item) => sub + (Number(item.cantidad) || 1), 0);
+    const prods = Array.isArray(p?.productos) ? p.productos : [];
+    return sum + prods.reduce((sub, item) => sub + (Number(item.cantidad) || 1), 0);
   }, 0);
 
   const handleVerTicket = (pedido) => {

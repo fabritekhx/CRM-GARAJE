@@ -304,30 +304,33 @@ export const cargarPedidosDesdeSupabase = async () => {
     const { data, error } = await supabase
       .from('pedidos')
       .select('*')
-      .neq('id', 'SYS_MESAS_ESTADO_GLOBAL')
+      .not('id', 'like', 'SYS_%')
+      .neq('estado', 'config')
       .order('numero_orden', { ascending: false });
 
     if (error) throw error;
 
-    // Mapear campos de snake_case a camelCase para la app
-    const pedidosMapeados = (data || []).map((row) => ({
-      id: row.id,
-      numeroOrden: row.numero_orden,
-      mesa: row.mesa,
-      fecha: row.fecha,
-      total: Number(row.total) || 0,
-      metodoPago: row.metodo_pago,
-      montoEfectivo: Number(row.monto_efectivo) || 0,
-      montoTransferencia: Number(row.monto_transferencia) || 0,
-      montoRecibido: Number(row.monto_recibido) || 0,
-      cambio: Number(row.cambio) || 0,
-      banco: row.banco,
-      comprobante: row.comprobante,
-      notas: row.notas,
-      estado: row.estado,
-      desglosePagos: row.desglose_pagos || [],
-      productos: row.productos || [],
-    }));
+    // Mapear campos de snake_case a camelCase para la app y filtrar filas de sistema
+    const pedidosMapeados = (data || [])
+      .filter((row) => row && !String(row.id).startsWith('SYS_') && row.estado !== 'config')
+      .map((row) => ({
+        id: row.id,
+        numeroOrden: row.numero_orden,
+        mesa: row.mesa,
+        fecha: row.fecha,
+        total: Number(row.total) || 0,
+        metodoPago: row.metodo_pago,
+        montoEfectivo: Number(row.monto_efectivo) || 0,
+        montoTransferencia: Number(row.monto_transferencia) || 0,
+        montoRecibido: Number(row.monto_recibido) || 0,
+        cambio: Number(row.cambio) || 0,
+        banco: row.banco,
+        comprobante: row.comprobante,
+        notas: row.notas,
+        estado: row.estado,
+        desglosePagos: Array.isArray(row.desglose_pagos) ? row.desglose_pagos : [],
+        productos: Array.isArray(row.productos) ? row.productos : [],
+      }));
 
     return { success: true, data: pedidosMapeados };
   } catch (err) {
