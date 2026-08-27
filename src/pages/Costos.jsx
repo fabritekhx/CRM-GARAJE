@@ -47,7 +47,10 @@ export default function Costos() {
     mostrarNotificacion,
     preciosMap,
     actualizarPrecioBaseProducto,
-    restaurarPreciosBasePredeterminados 
+    restaurarPreciosBasePredeterminados,
+    costosMap,
+    actualizarCostoProducto,
+    restaurarCostosPredeterminados: restaurarCostosPredeterminadosContext
   } = usePedidos();
 
   // Fecha seleccionada para ver rentabilidad del día
@@ -65,9 +68,6 @@ export default function Costos() {
   const [categoriaFiltro, setCategoriaFiltro] = useState('todas');
   const [ordenCampo, setOrdenCampo] = useState('ganancia'); // 'ganancia' | 'margen' | 'nombre' | 'vendidos' | 'costo' | 'precio'
   const [ordenAsc, setOrdenAsc] = useState(false);
-
-  // Mapa de costos reactivo
-  const [costosMap, setCostosMap] = useState(() => obtenerCostosProductos());
 
   // Estado para edición rápida de costo en tabla
   const [editandoProductoId, setEditandoProductoId] = useState(null);
@@ -252,16 +252,9 @@ export default function Costos() {
       return;
     }
 
-    const nuevosCostos = {
-      ...costosMap,
-      [productoId]: Number(valorNum.toFixed(2)),
-    };
-
-    setCostosMap(nuevosCostos);
-    guardarCostosProductos(nuevosCostos);
+    actualizarCostoProducto(productoId, valorNum);
     setEditandoProductoId(null);
     setNuevoCostoTemp('');
-    mostrarNotificacion('Costo de compra actualizado y guardado', 'success');
   };
 
   // Guardar edición permanente de precio de venta de un producto
@@ -275,15 +268,12 @@ export default function Costos() {
     actualizarPrecioBaseProducto(productoId, valorNum);
     setEditandoPrecioProductoId(null);
     setNuevoPrecioTemp('');
-    mostrarNotificacion('Precio de venta fijado en el menú correctamente', 'success');
   };
 
   // Restaurar todos los costos a predeterminados de fábrica
   const restaurarCostosPredeterminados = () => {
     if (window.confirm('¿Deseas restaurar todos los costos de compra a sus valores iniciales sugeridos?')) {
-      setCostosMap({ ...COSTOS_PREDETERMINADOS });
-      guardarCostosProductos({ ...COSTOS_PREDETERMINADOS });
-      mostrarNotificacion('Costos restaurados a valores predeterminados', 'info');
+      restaurarCostosPredeterminadosContext();
     }
   };
 

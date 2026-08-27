@@ -29,7 +29,8 @@ export default function Cierres() {
     cierresHistorial, 
     fechaActualApp,
     realizarCierreCaja, 
-    mostrarNotificacion 
+    mostrarNotificacion,
+    costosMap
   } = usePedidos();
 
   // Fecha seleccionada para el nuevo cierre (por defecto hoy en base a fechaActualApp)
@@ -514,6 +515,7 @@ export default function Cierres() {
         titulo="Reporte Detallado de Cierre de Caja"
         subtituloFecha={formatearFechaConDiaSemana(fechaCierre)}
         fechaReporte={fechaCierre}
+        costosPersonalizados={costosMap}
       />
 
     </div>

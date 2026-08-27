@@ -391,6 +391,74 @@ export const probarConexionSupabase = async () => {
 };
 
 /**
+ * Guarda la configuración de precios y costos personalizados en Supabase
+ */
+export const guardarConfiguracionPreciosYCostosEnSupabase = async (preciosMap, costosMap) => {
+  if (!supabase) return { success: false, error: 'Supabase no inicializado' };
+
+  try {
+    const payload = {
+      id: 'SYS_CONFIG_PRECIOS_Y_COSTOS',
+      numero_orden: 0,
+      mesa: '0',
+      fecha: new Date().toISOString(),
+      total: 0,
+      metodo_pago: 'sistema',
+      monto_efectivo: 0,
+      monto_transferencia: 0,
+      monto_recibido: 0,
+      cambio: 0,
+      banco: '',
+      comprobante: '',
+      notas: 'CONFIG_PRECIOS_Y_COSTOS_PERSONALIZADOS',
+      estado: 'config',
+      desglose_pagos: [],
+      productos: {
+        precios: preciosMap || {},
+        costos: costosMap || {},
+      },
+    };
+
+    const { error } = await supabase
+      .from('pedidos')
+      .upsert(payload, { onConflict: 'id' });
+
+    if (error) throw error;
+    return { success: true };
+  } catch (err) {
+    console.warn('Supabase: no se pudo guardar config de precios/costos en nube:', err.message || err);
+    return { success: false, error: err.message || err };
+  }
+};
+
+/**
+ * Carga la configuración de precios y costos personalizados desde Supabase
+ */
+export const cargarConfiguracionPreciosYCostosDesdeSupabase = async () => {
+  if (!supabase) return { success: false, data: null };
+
+  try {
+    const { data, error } = await supabase
+      .from('pedidos')
+      .select('*')
+      .eq('id', 'SYS_CONFIG_PRECIOS_Y_COSTOS')
+      .maybeSingle();
+
+    if (!error && data && data.productos) {
+      return {
+        success: true,
+        precios: data.productos.precios || null,
+        costos: data.productos.costos || null,
+      };
+    }
+    return { success: false, data: null };
+  } catch (err) {
+    console.warn('Supabase: aviso al cargar config de precios/costos remotos:', err.message || err);
+    return { success: false, error: err.message || err };
+  }
+};
+
+/**
  * Limpia todas las tablas en Supabase para reiniciar el sistema desde cero
  */
 export const limpiarBaseDatosSupabase = async () => {

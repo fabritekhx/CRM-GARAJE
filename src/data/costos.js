@@ -83,6 +83,32 @@ export const guardarCostosProductos = (nuevosCostos) => {
 };
 
 /**
+ * Actualiza el costo de compra de un producto individual y lo guarda
+ */
+export const actualizarCostoProducto = (productoId, nuevoCosto) => {
+  const actuales = obtenerCostosProductos();
+  const costoNum = Math.max(0, Number(parseFloat(nuevoCosto).toFixed(2)) || 0);
+  const actualizados = {
+    ...actuales,
+    [productoId]: costoNum,
+  };
+  guardarCostosProductos(actualizados);
+  return actualizados;
+};
+
+/**
+ * Restablece los costos de insumos a los valores de fábrica
+ */
+export const restaurarCostosPredeterminados = () => {
+  try {
+    localStorage.removeItem(STORAGE_COSTOS);
+    return { ...COSTOS_PREDETERMINADOS };
+  } catch {
+    return { ...COSTOS_PREDETERMINADOS };
+  }
+};
+
+/**
  * Obtiene el costo unitario estimado para un producto específico
  */
 export const obtenerCostoUnitario = (productoId, precioUnitario = 0, costosMap = null) => {

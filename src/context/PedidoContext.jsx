@@ -22,6 +22,8 @@ import {
   cargarCierresDesdeSupabase,
   guardarMesasActivasEnSupabase,
   cargarMesasActivasDesdeSupabase,
+  guardarConfiguracionPreciosYCostosEnSupabase,
+  cargarConfiguracionPreciosYCostosDesdeSupabase,
   probarConexionSupabase,
   limpiarBaseDatosSupabase,
   SUPABASE_PROJECT_NAME, 
@@ -36,6 +38,13 @@ import {
   restaurarPreciosPredeterminados as restaurarPreciosPredeterminadosHelper,
   obtenerMenuConPreciosActualizados
 } from '../data/precios';
+import {
+  obtenerCostosProductos,
+  guardarCostosProductos,
+  actualizarCostoProducto as actualizarCostoProductoHelper,
+  restaurarCostosPredeterminados as restaurarCostosPredeterminadosHelper,
+  COSTOS_PREDETERMINADOS
+} from '../data/costos';
 import confetti from 'canvas-confetti';
 
 const PedidoContext = createContext();
@@ -106,6 +115,9 @@ export const PedidoProvider = ({ children }) => {
 
   // Mapa de Precios de Venta Personalizados y Persistentes
   const [preciosMap, setPreciosMap] = useState(() => obtenerPreciosProductos());
+
+  // Mapa de Costos de Compra Personalizados y Persistentes
+  const [costosMap, setCostosMap] = useState(() => obtenerCostosProductos());
 
   // Consecutivo de orden diario (inicia en 0 al iniciar el día para que la primera orden sea la #1)
   const [ultimoNumeroOrden, setUltimoNumeroOrden] = useState(() => {
@@ -306,7 +318,22 @@ export const PedidoProvider = ({ children }) => {
         setCierresHistorial(resCierres.data || []);
       }
 
-      // 5. Cargar de Firestore si está configurado como backup
+      // 6. Cargar configuración remota de precios de venta y costos de compra
+      const resConfig = await cargarConfiguracionPreciosYCostosDesdeSupabase();
+      if (resConfig.success) {
+        if (resConfig.precios && Object.keys(resConfig.precios).length > 0) {
+          const fusionadosPrecios = { ...obtenerPreciosProductos(), ...resConfig.precios };
+          setPreciosMap(fusionadosPrecios);
+          guardarPreciosProductos(fusionadosPrecios);
+        }
+        if (resConfig.costos && Object.keys(resConfig.costos).length > 0) {
+          const fusionadosCostos = { ...obtenerCostosProductos(), ...resConfig.costos };
+          setCostosMap(fusionadosCostos);
+          guardarCostosProductos(fusionadosCostos);
+        }
+      }
+
+      // 7. Cargar de Firestore si está configurado como backup
       if (db && isFirebaseConfigured()) {
         try {
           const pedidosRef = collection(db, 'pedidos');
@@ -372,6 +399,19 @@ export const PedidoProvider = ({ children }) => {
           }
         });
 
+        channel.on('broadcast', { event: 'config_actualizada' }, (event) => {
+          const payload = event?.payload;
+          if (payload?.senderId === clientIdRef.current) return;
+          if (payload?.precios) {
+            setPreciosMap(payload.precios);
+            guardarPreciosProductos(payload.precios);
+          }
+          if (payload?.costos) {
+            setCostosMap(payload.costos);
+            guardarCostosProductos(payload.costos);
+          }
+        });
+
         channel.subscribe((status) => {
           if (status === 'SUBSCRIBED') {
             supabaseChannelRef.current = channel;
@@ -406,6 +446,23 @@ export const PedidoProvider = ({ children }) => {
 
         if (event.data?.tipo === 'SYNC_PRECIOS' && event.data.precios) {
           setPreciosMap(event.data.precios);
+          guardarPreciosProductos(event.data.precios);
+        }
+
+        if (event.data?.tipo === 'SYNC_COSTOS' && event.data.costos) {
+          setCostosMap(event.data.costos);
+          guardarCostosProductos(event.data.costos);
+        }
+
+        if (event.data?.tipo === 'SYNC_PRECIOS_Y_COSTOS') {
+          if (event.data.precios) {
+            setPreciosMap(event.data.precios);
+            guardarPreciosProductos(event.data.precios);
+          }
+          if (event.data.costos) {
+            setCostosMap(event.data.costos);
+            guardarCostosProductos(event.data.costos);
+          }
         }
       };
     }
@@ -822,17 +879,87 @@ export const PedidoProvider = ({ children }) => {
     const mapaActualizado = actualizarPrecioProductoHelper(productoId, precioNum);
     setPreciosMap(mapaActualizado);
 
+    // Guardar en Supabase en segundo plano
+    guardarConfiguracionPreciosYCostosEnSupabase(mapaActualizado, costosMap).catch(() => {});
+
     if (localBroadcastChannel) {
       localBroadcastChannel.postMessage({
-        tipo: 'SYNC_PRECIOS',
+        tipo: 'SYNC_PRECIOS_Y_COSTOS',
         precios: mapaActualizado,
+        costos: costosMap,
         senderId: clientIdRef.current,
       });
     }
 
+    if (supabaseChannelRef.current) {
+      try {
+        const broadcastEvent = {
+          type: 'broadcast',
+          event: 'config_actualizada',
+          payload: {
+            precios: mapaActualizado,
+            costos: costosMap,
+            senderId: clientIdRef.current,
+          }
+        };
+        if (typeof supabaseChannelRef.current.httpSend === 'function') {
+          supabaseChannelRef.current.httpSend(broadcastEvent).catch(() => {});
+        } else if (typeof supabaseChannelRef.current.send === 'function') {
+          supabaseChannelRef.current.send(broadcastEvent);
+        }
+      } catch (e) {
+        console.warn('Error en broadcast Supabase config:', e);
+      }
+    }
+
     const itemMenu = MENU.find((m) => m.id === productoId);
     const nombreProd = itemMenu ? itemMenu.nombre : 'Producto';
-    mostrarNotificacion(`Precio fijo guardado: ${nombreProd} a $${precioNum.toFixed(2)}`, 'success');
+    mostrarNotificacion(`Precio de venta guardado: ${nombreProd} a $${precioNum.toFixed(2)}`, 'success');
+    return mapaActualizado;
+  };
+
+  // Actualizar costo de compra de un producto y persistirlo permanentemente
+  const actualizarCostoProducto = (productoId, nuevoCosto) => {
+    const costoNum = Math.max(0, parseFloat(nuevoCosto) || 0);
+    const mapaActualizado = actualizarCostoProductoHelper(productoId, costoNum);
+    setCostosMap(mapaActualizado);
+
+    // Guardar en Supabase en segundo plano
+    guardarConfiguracionPreciosYCostosEnSupabase(preciosMap, mapaActualizado).catch(() => {});
+
+    if (localBroadcastChannel) {
+      localBroadcastChannel.postMessage({
+        tipo: 'SYNC_PRECIOS_Y_COSTOS',
+        precios: preciosMap,
+        costos: mapaActualizado,
+        senderId: clientIdRef.current,
+      });
+    }
+
+    if (supabaseChannelRef.current) {
+      try {
+        const broadcastEvent = {
+          type: 'broadcast',
+          event: 'config_actualizada',
+          payload: {
+            precios: preciosMap,
+            costos: mapaActualizado,
+            senderId: clientIdRef.current,
+          }
+        };
+        if (typeof supabaseChannelRef.current.httpSend === 'function') {
+          supabaseChannelRef.current.httpSend(broadcastEvent).catch(() => {});
+        } else if (typeof supabaseChannelRef.current.send === 'function') {
+          supabaseChannelRef.current.send(broadcastEvent);
+        }
+      } catch (e) {
+        console.warn('Error en broadcast Supabase config:', e);
+      }
+    }
+
+    const itemMenu = MENU.find((m) => m.id === productoId);
+    const nombreProd = itemMenu ? itemMenu.nombre : 'Producto';
+    mostrarNotificacion(`Costo de compra guardado: ${nombreProd} a $${costoNum.toFixed(2)}`, 'success');
     return mapaActualizado;
   };
 
@@ -841,15 +968,38 @@ export const PedidoProvider = ({ children }) => {
     const mapaPredeterminado = restaurarPreciosPredeterminadosHelper();
     setPreciosMap(mapaPredeterminado);
 
+    guardarConfiguracionPreciosYCostosEnSupabase(mapaPredeterminado, costosMap).catch(() => {});
+
     if (localBroadcastChannel) {
       localBroadcastChannel.postMessage({
-        tipo: 'SYNC_PRECIOS',
+        tipo: 'SYNC_PRECIOS_Y_COSTOS',
         precios: mapaPredeterminado,
+        costos: costosMap,
         senderId: clientIdRef.current,
       });
     }
 
     mostrarNotificacion('Precios de venta restaurados a los valores predeterminados', 'info');
+    return mapaPredeterminado;
+  };
+
+  // Restaurar todos los costos de compra a los valores iniciales predeterminados
+  const restaurarCostosPredeterminados = () => {
+    const mapaPredeterminado = restaurarCostosPredeterminadosHelper();
+    setCostosMap(mapaPredeterminado);
+
+    guardarConfiguracionPreciosYCostosEnSupabase(preciosMap, mapaPredeterminado).catch(() => {});
+
+    if (localBroadcastChannel) {
+      localBroadcastChannel.postMessage({
+        tipo: 'SYNC_PRECIOS_Y_COSTOS',
+        precios: preciosMap,
+        costos: mapaPredeterminado,
+        senderId: clientIdRef.current,
+      });
+    }
+
+    mostrarNotificacion('Costos de insumos restaurados a los valores predeterminados', 'info');
     return mapaPredeterminado;
   };
 
@@ -1330,6 +1480,9 @@ export const PedidoProvider = ({ children }) => {
         preciosMap,
         actualizarPrecioBaseProducto,
         restaurarPreciosBasePredeterminados,
+        costosMap,
+        actualizarCostoProducto,
+        restaurarCostosPredeterminados,
         supabaseProjectName: SUPABASE_PROJECT_NAME,
         supabaseProjectId: SUPABASE_PROJECT_ID,
         supabaseUrl: SUPABASE_URL,
