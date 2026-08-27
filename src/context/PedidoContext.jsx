@@ -23,8 +23,9 @@ import {
   guardarMesasActivasEnSupabase,
   cargarMesasActivasDesdeSupabase,
   probarConexionSupabase,
-  SUPABASE_PROJECT_NAME,
-  SUPABASE_PROJECT_ID,
+  limpiarBaseDatosSupabase,
+  SUPABASE_PROJECT_NAME, 
+  SUPABASE_PROJECT_ID, 
   SUPABASE_URL
 } from '../supabase/client';
 import { fusionarMesasInteligente, calcularUltimoNumeroOrdenDelDia } from '../utils/helpers';
@@ -279,9 +280,9 @@ export const PedidoProvider = ({ children }) => {
       // 3. Cargar pedidos cobrados desde Supabase
       const resPedidos = await cargarPedidosDesdeSupabase();
       let pedidosActuales = pedidosHistorial;
-      if (resPedidos.success && resPedidos.data.length > 0) {
-        pedidosActuales = resPedidos.data;
-        setPedidosHistorial(resPedidos.data);
+      if (resPedidos.success) {
+        pedidosActuales = resPedidos.data || [];
+        setPedidosHistorial(resPedidos.data || []);
       }
 
       // 4. Recalcular consecutivo de orden de HOY para empezar en 1 y no saltar números
@@ -291,8 +292,8 @@ export const PedidoProvider = ({ children }) => {
 
       // 5. Cargar cierres desde Supabase
       const resCierres = await cargarCierresDesdeSupabase();
-      if (resCierres.success && resCierres.data.length > 0) {
-        setCierresHistorial(resCierres.data);
+      if (resCierres.success) {
+        setCierresHistorial(resCierres.data || []);
       }
 
       // 5. Cargar de Firestore si está configurado como backup
@@ -454,7 +455,7 @@ export const PedidoProvider = ({ children }) => {
     const pollingPedidosInterval = setInterval(async () => {
       try {
         const res = await cargarPedidosDesdeSupabase();
-        if (res.success && Array.isArray(res.data) && res.data.length > 0) {
+        if (res.success && Array.isArray(res.data)) {
           setPedidosHistorial((current) => {
             if (current.length !== res.data.length) {
               return res.data;
@@ -1196,6 +1197,54 @@ export const PedidoProvider = ({ children }) => {
     mostrarNotificacion('Pedido anulado y eliminado exitosamente', 'info');
   };
 
+  /**
+   * Reinicia completamente el sistema desde cero:
+   * Limpia mesas activas, historial de comandas, cierres y reinicia el consecutivo de orden en 0.
+   */
+  const reiniciarTodoACero = async (limpiarNube = true) => {
+    try {
+      setSincronizando(true);
+      
+      // 1. Limpiar en Supabase si se solicita
+      if (limpiarNube) {
+        await limpiarBaseDatosSupabase();
+      }
+
+      // 2. Resetear estados en memoria
+      const mesasLimpias = MESAS_INICIALES.map((m) => ({ ...m, pedidos: [], ocupada: false }));
+      setMesas(mesasLimpias);
+      setPedidosHistorial([]);
+      setCierresHistorial([]);
+      setUltimoNumeroOrden(0);
+      setMesaSeleccionada(null);
+      setIsPedidoModalOpen(false);
+      setIsCobroModalOpen(false);
+      setIsTicketModalOpen(false);
+
+      // 3. Limpiar localStorage
+      try {
+        localStorage.removeItem('el_garaje_mesas_v2');
+        localStorage.removeItem('el_garaje_pedidos_v2');
+        localStorage.removeItem('el_garaje_cierres_v2');
+        localStorage.removeItem('el_garaje_ultimo_orden_v2');
+      } catch {
+        // Silencioso
+      }
+
+      // 4. Notificar a otros clientes por BroadcastChannel y Realtime
+      transmitirCambiosMesas(mesasLimpias, 0);
+
+      mostrarNotificacion('Sistema reiniciado desde cero con éxito', 'success');
+      return { success: true };
+    } catch (err) {
+      console.error('Error al reiniciar sistema a cero:', err);
+      mostrarNotificacion('Error al reiniciar: ' + (err.message || err), 'error');
+      return { success: false, error: err };
+    } finally {
+      setSincronizando(false);
+    }
+  };
+
   return (
     <PedidoContext.Provider
       value={{
@@ -1247,6 +1296,7 @@ export const PedidoProvider = ({ children }) => {
         realizarCierreCaja,
         sincronizarConSupabase,
         eliminarPedidoHistorial,
+        reiniciarTodoACero,
         mostrarNotificacion,
       }}
     >

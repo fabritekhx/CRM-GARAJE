@@ -80,7 +80,7 @@ CREATE TABLE IF NOT EXISTS public.cierres (
 CREATE TABLE IF NOT EXISTS public.mesas_activas (
     id TEXT PRIMARY KEY DEFAULT 'estado_actual',
     mesas JSONB NOT NULL DEFAULT '[]'::jsonb,
-    ultimo_numero_orden INTEGER DEFAULT 100,
+    ultimo_numero_orden INTEGER DEFAULT 0,
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -109,14 +109,14 @@ CREATE POLICY "Permitir todo a mesas_activas para POS" ON public.mesas_activas
  * Guarda el estado actual de las mesas abiertas y comandas en curso en Supabase
  * para sincronizar inmediatamente con otros navegadores y dispositivos.
  */
-export const guardarMesasActivasEnSupabase = async (mesas, ultimoNumeroOrden = 100) => {
+export const guardarMesasActivasEnSupabase = async (mesas, ultimoNumeroOrden = 0) => {
   if (!supabase) return { success: false, error: 'Supabase no inicializado' };
 
   try {
     const payload = {
       id: 'estado_actual',
       mesas: mesas || [],
-      ultimo_numero_orden: Number(ultimoNumeroOrden) || 100,
+      ultimo_numero_orden: Number(ultimoNumeroOrden) || 0,
       updated_at: new Date().toISOString(),
     };
 
@@ -132,7 +132,7 @@ export const guardarMesasActivasEnSupabase = async (mesas, ultimoNumeroOrden = 1
     // Fallback: Si 'mesas_activas' aún no se crea, guardar en 'pedidos' como registro de sistema
     const fallbackPayload = {
       id: 'SYS_MESAS_ESTADO_GLOBAL',
-      numero_orden: Number(ultimoNumeroOrden) || 100,
+      numero_orden: Number(ultimoNumeroOrden) || 0,
       mesa: '0', // Usar string numérico '0' para compatibilidad tanto si 'mesa' es TEXT como INTEGER en Postgres
       fecha: new Date().toISOString(),
       total: 0,
@@ -387,5 +387,33 @@ export const probarConexionSupabase = async () => {
     return { conectado: true, tablaPendiente: false, mensaje: 'Conexión exitosa a Supabase y tablas listas' };
   } catch (e) {
     return { conectado: false, mensaje: e.message || 'No se pudo conectar a Supabase' };
+  }
+};
+
+/**
+ * Limpia todas las tablas en Supabase para reiniciar el sistema desde cero
+ */
+export const limpiarBaseDatosSupabase = async () => {
+  if (!supabase) return { success: false, error: 'Supabase no inicializado' };
+
+  try {
+    // 1. Eliminar todos los pedidos
+    await supabase.from('pedidos').delete().neq('id', 'SYS_VACIO_INEXISTENTE');
+    
+    // 2. Eliminar todos los cierres
+    await supabase.from('cierres').delete().neq('id', 'SYS_VACIO_INEXISTENTE');
+    
+    // 3. Resetear mesas activas
+    await supabase.from('mesas_activas').upsert({
+      id: 'estado_actual',
+      mesas: [],
+      ultimo_numero_orden: 0,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'id' });
+
+    return { success: true };
+  } catch (err) {
+    console.warn('Error al limpiar Supabase:', err);
+    return { success: false, error: err.message || err };
   }
 };

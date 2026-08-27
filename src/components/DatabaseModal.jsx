@@ -30,6 +30,7 @@ export default function DatabaseModal() {
     setIsDatabaseModalOpen, 
     isSupabaseConnected, 
     sincronizarConSupabase,
+    reiniciarTodoACero,
     sincronizando,
     mostrarNotificacion 
   } = usePedidos();
@@ -38,6 +39,7 @@ export default function DatabaseModal() {
   const [copiadoSql, setCopiadoSql] = useState(false);
   const [probando, setProbando] = useState(false);
   const [testResultado, setTestResultado] = useState(null);
+  const [confirmandoReset, setConfirmandoReset] = useState(false);
 
   if (!isDatabaseModalOpen) return null;
 
@@ -189,6 +191,54 @@ export default function DatabaseModal() {
                   {testResultado.mensaje}
                 </div>
               )}
+
+              {/* Zona de Empezar desde Cero / Limpiar Caché */}
+              <div className="pt-3 border-t border-slate-800 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h5 className="text-xs font-bold text-slate-300">Empezar desde Cero</h5>
+                    <p className="text-[11px] text-slate-400">
+                      Reinicia el consecutivo de orden a 0 y borra las comandas locales para sincronizar desde limpio.
+                    </p>
+                  </div>
+                </div>
+
+                {confirmandoReset ? (
+                  <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 space-y-2">
+                    <p className="text-xs font-semibold text-rose-300">
+                      ¿Confirmas que deseas reiniciar todas las mesas e historial local para comenzar desde cero?
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          await reiniciarTodoACero(true);
+                          setConfirmandoReset(false);
+                        }}
+                        className="py-1.5 px-3 rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs transition-colors"
+                      >
+                        Sí, Reiniciar Todo
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setConfirmandoReset(false)}
+                        className="py-1.5 px-3 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition-colors"
+                      >
+                        Cancelar
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setConfirmandoReset(true)}
+                    className="w-full py-2 px-3 rounded-xl border border-rose-500/30 bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 font-bold text-xs flex items-center justify-center gap-2 transition-colors"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    <span>Reiniciar Caché Local y Empezar de Cero</span>
+                  </button>
+                )}
+              </div>
 
             </div>
           )}
