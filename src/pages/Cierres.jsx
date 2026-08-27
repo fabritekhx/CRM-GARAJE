@@ -21,6 +21,7 @@ import {
 import { usePedidos } from '../context/PedidoContext';
 import { formatearDinero, formatearFecha, formatearFechaCorta } from '../utils/helpers';
 import FirebaseModal from '../components/FirebaseModal';
+import ReportePDFModal from '../components/ReportePDFModal';
 
 export default function Cierres() {
   const { 
@@ -35,6 +36,7 @@ export default function Cierres() {
   const [fechaCierre, setFechaCierre] = useState(fechaActualApp || new Date().toISOString().split('T')[0]);
   const [cierreSeleccionadoDetalle, setCierreSeleccionadoDetalle] = useState(null);
   const [procesando, setProcesando] = useState(false);
+  const [isPDFModalOpen, setIsPDFModalOpen] = useState(false);
 
   // Sincronizar fechaCierre cuando cambie de día en vivo si el usuario está viendo "hoy"
   const esHoy = fechaCierre === (fechaActualApp || new Date().toISOString().split('T')[0]);
@@ -210,7 +212,18 @@ export default function Cierres() {
             </h2>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              type="button"
+              onClick={() => setIsPDFModalOpen(true)}
+              disabled={resumenVivo.numPedidos === 0}
+              className="px-4 py-3 rounded-2xl bg-slate-800 hover:bg-slate-750 text-amber-300 border border-amber-500/30 font-bold text-xs sm:text-sm flex items-center gap-2 shadow-lg disabled:opacity-40 disabled:pointer-events-none transition-all"
+              title="Generar reporte detallado en PDF con efectivo, transferencias y ganancias"
+            >
+              <FileText className="w-4 h-4 text-amber-400" />
+              <span>Reporte PDF Detallado</span>
+            </button>
+
             <button
               type="button"
               onClick={handleEjecutarCierre}
@@ -493,6 +506,15 @@ export default function Cierres() {
       )}
 
       <FirebaseModal />
+
+      <ReportePDFModal
+        isOpen={isPDFModalOpen}
+        onClose={() => setIsPDFModalOpen(false)}
+        pedidos={resumenVivo.pedidos}
+        titulo="Reporte Detallado de Cierre de Caja"
+        subtituloFecha={fechaCierre}
+        fechaReporte={fechaCierre}
+      />
 
     </div>
   );

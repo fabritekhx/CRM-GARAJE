@@ -10,6 +10,7 @@ import {
   Download, 
   FileSpreadsheet, 
   FileCode, 
+  FileText,
   PieChart as PieIcon, 
   UtensilsCrossed, 
   ArrowUpRight,
@@ -34,6 +35,7 @@ import {
   GraficoTopProductos 
 } from '../components/Charts';
 import FirebaseModal from '../components/FirebaseModal';
+import ReportePDFModal from '../components/ReportePDFModal';
 
 export default function Analisis() {
   const { pedidosHistorial, mostrarNotificacion } = usePedidos();
@@ -57,6 +59,7 @@ export default function Analisis() {
 
   // Filtro de método de pago
   const [filtroMetodo, setFiltroMetodo] = useState('todos');
+  const [isPDFModalOpen, setIsPDFModalOpen] = useState(false);
 
   // Navegar entre días
   const cambiarDia = (offset) => {
@@ -281,7 +284,17 @@ export default function Analisis() {
         </div>
 
         {/* Acciones de exportación */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            type="button"
+            onClick={() => setIsPDFModalOpen(true)}
+            disabled={pedidosFiltrados.length === 0}
+            className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 text-xs font-black shadow-lg shadow-amber-500/20 flex items-center gap-1.5 transition-all disabled:opacity-40 disabled:pointer-events-none"
+            title="Generar reporte detallado en PDF con efectivo, transferencias y ganancias"
+          >
+            <FileText className="w-4 h-4" />
+            <span>Reporte PDF Detallado</span>
+          </button>
           <button
             type="button"
             onClick={handleExportarCSV}
@@ -703,6 +716,19 @@ export default function Analisis() {
       </div>
 
       <FirebaseModal />
+
+      <ReportePDFModal
+        isOpen={isPDFModalOpen}
+        onClose={() => setIsPDFModalOpen(false)}
+        pedidos={pedidosFiltrados}
+        titulo="Reporte Detallado de Ventas y Rendimiento"
+        subtituloFecha={
+          modoAnalisis === 'dia'
+            ? formatearDiaLegible(fechaSeleccionada)
+            : (modoAnalisis === 'rango' ? `Del ${fechaInicio} al ${fechaFin}` : 'Historial Total')
+        }
+        fechaReporte={fechaSeleccionada}
+      />
 
     </div>
   );

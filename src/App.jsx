@@ -5,6 +5,7 @@ import Navbar from './components/Navbar';
 import Mesas from './pages/Mesas';
 import Pedidos from './pages/Pedidos';
 import Cierres from './pages/Cierres';
+import Costos from './pages/Costos';
 import Analisis from './pages/Analisis';
 import ErrorBoundary from './components/ErrorBoundary';
 import { CheckCircle2, AlertCircle, Info, X } from 'lucide-react';
@@ -53,6 +54,7 @@ function AppContent() {
           <Route path="/" element={<Mesas />} />
           <Route path="/pedidos" element={<Pedidos />} />
           <Route path="/cierres" element={<Cierres />} />
+          <Route path="/costos" element={<Costos />} />
           <Route path="/analisis" element={<Analisis />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

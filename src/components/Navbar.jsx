@@ -5,7 +5,8 @@ import {
   Receipt, 
   Calculator, 
   BarChart3, 
-  Clock
+  Clock,
+  DollarSign
 } from 'lucide-react';
 import { usePedidos } from '../context/PedidoContext';
 
@@ -99,6 +100,20 @@ export default function Navbar() {
             </NavLink>
 
             <NavLink
+              to="/costos"
+              className={({ isActive }) =>
+                `flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm font-medium transition-all whitespace-nowrap ${
+                  isActive
+                    ? 'bg-amber-500 text-slate-950 font-bold shadow-lg shadow-amber-500/20'
+                    : 'text-slate-300 hover:text-white hover:bg-slate-800/80'
+                }`
+              }
+            >
+              <DollarSign className="w-4 h-4" />
+              <span>Costos y Ganancias</span>
+            </NavLink>
+
+            <NavLink
               to="/analisis"
               className={({ isActive }) =>
                 `flex items-center gap-2 px-3.5 py-2 rounded-xl text-sm font-medium transition-all whitespace-nowrap ${
@@ -132,7 +147,7 @@ export default function Navbar() {
           <NavLink
             to="/"
             className={({ isActive }) =>
-              `flex flex-col items-center gap-1 text-[11px] font-medium py-1 px-3 rounded-lg transition-colors ${
+              `flex flex-col items-center gap-1 text-[11px] font-medium py-1 px-2.5 rounded-lg transition-colors ${
                 isActive ? 'text-amber-400 bg-amber-400/10 font-bold' : 'text-slate-400 hover:text-slate-200'
               }`
             }
@@ -144,7 +159,7 @@ export default function Navbar() {
           <NavLink
             to="/pedidos"
             className={({ isActive }) =>
-              `flex flex-col items-center gap-1 text-[11px] font-medium py-1 px-3 rounded-lg transition-colors ${
+              `flex flex-col items-center gap-1 text-[11px] font-medium py-1 px-2.5 rounded-lg transition-colors ${
                 isActive ? 'text-amber-400 bg-amber-400/10 font-bold' : 'text-slate-400 hover:text-slate-200'
               }`
             }
@@ -156,7 +171,7 @@ export default function Navbar() {
           <NavLink
             to="/cierres"
             className={({ isActive }) =>
-              `flex flex-col items-center gap-1 text-[11px] font-medium py-1 px-3 rounded-lg transition-colors ${
+              `flex flex-col items-center gap-1 text-[11px] font-medium py-1 px-2.5 rounded-lg transition-colors ${
                 isActive ? 'text-amber-400 bg-amber-400/10 font-bold' : 'text-slate-400 hover:text-slate-200'
               }`
             }
@@ -166,9 +181,21 @@ export default function Navbar() {
           </NavLink>
 
           <NavLink
+            to="/costos"
+            className={({ isActive }) =>
+              `flex flex-col items-center gap-1 text-[11px] font-medium py-1 px-2.5 rounded-lg transition-colors ${
+                isActive ? 'text-amber-400 bg-amber-400/10 font-bold' : 'text-slate-400 hover:text-slate-200'
+              }`
+            }
+          >
+            <DollarSign className="w-4 h-4" />
+            <span>Costos</span>
+          </NavLink>
+
+          <NavLink
             to="/analisis"
             className={({ isActive }) =>
-              `flex flex-col items-center gap-1 text-[11px] font-medium py-1 px-3 rounded-lg transition-colors ${
+              `flex flex-col items-center gap-1 text-[11px] font-medium py-1 px-2.5 rounded-lg transition-colors ${
                 isActive ? 'text-amber-400 bg-amber-400/10 font-bold' : 'text-slate-400 hover:text-slate-200'
               }`
             }
