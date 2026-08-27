@@ -61,6 +61,16 @@ export const formatearFechaCorta = (fecha) => {
 };
 
 /**
+ * Formatea una fecha a formato amigable completo en español (Ej: Miércoles, 26 de agosto de 2026)
+ */
+export const formatearDiaLegible = (fecha) => {
+  if (!fecha) return '';
+  // Si viene en formato YYYY-MM-DD, parsear con T12:00:00 para evitar desfaces por zona horaria UTC
+  const str = typeof fecha === 'string' && fecha.length === 10 ? `${fecha}T12:00:00` : fecha;
+  return formatearFecha(str, "EEEE, d 'de' MMMM 'de' yyyy");
+};
+
+/**
  * Exporta un array de objetos a un archivo JSON
  */
 export const exportarAJSON = (datos, nombreArchivo = 'el_garaje_reporte.json') => {

@@ -43,7 +43,7 @@ export function GraficoBarrasVentas({ datos }) {
         <BarChart data={datos} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.5} />
           <XAxis 
-            dataKey="fecha" 
+            dataKey={datos && datos[0] && datos[0].hora !== undefined ? 'hora' : 'fecha'} 
             stroke="#94a3b8" 
             fontSize={11} 
             tickLine={false} 
@@ -143,7 +143,7 @@ export function GraficoLineaVentas({ datos }) {
         <LineChart data={datos} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.5} />
           <XAxis 
-            dataKey="fecha" 
+            dataKey={datos && datos[0] && datos[0].hora !== undefined ? 'hora' : 'fecha'} 
             stroke="#94a3b8" 
             fontSize={11} 
             tickLine={false} 
