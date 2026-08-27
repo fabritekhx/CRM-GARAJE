@@ -41,7 +41,14 @@ import { formatearDinero, formatearFecha, formatearDiaLegible } from '../utils/h
 import ReportePDFModal from '../components/ReportePDFModal';
 
 export default function Costos() {
-  const { pedidosHistorial, fechaActualApp, mostrarNotificacion } = usePedidos();
+  const { 
+    pedidosHistorial, 
+    fechaActualApp, 
+    mostrarNotificacion,
+    preciosMap,
+    actualizarPrecioBaseProducto,
+    restaurarPreciosBasePredeterminados 
+  } = usePedidos();
 
   // Fecha seleccionada para ver rentabilidad del día
   const [modoFecha, setModoFecha] = useState('dia'); // 'dia' | 'rango' | 'todos'
@@ -65,6 +72,10 @@ export default function Costos() {
   // Estado para edición rápida de costo en tabla
   const [editandoProductoId, setEditandoProductoId] = useState(null);
   const [nuevoCostoTemp, setNuevoCostoTemp] = useState('');
+
+  // Estado para edición rápida de precio de venta en tabla
+  const [editandoPrecioProductoId, setEditandoPrecioProductoId] = useState(null);
+  const [nuevoPrecioTemp, setNuevoPrecioTemp] = useState('');
 
   // Control del modal de PDF
   const [isPDFModalOpen, setIsPDFModalOpen] = useState(false);
@@ -133,7 +144,7 @@ export default function Costos() {
   const productosCalculados = useMemo(() => {
     return MENU.map((prod) => {
       const costo = Number(costosMap[prod.id] !== undefined ? costosMap[prod.id] : (COSTOS_PREDETERMINADOS[prod.id] || 0));
-      const precioVenta = Number(prod.precioBase) || 0;
+      const precioVenta = Number(preciosMap && preciosMap[prod.id] !== undefined ? preciosMap[prod.id] : prod.precioBase) || 0;
       const gananciaUnitaria = precioVenta - costo;
       const margenPorcentaje = precioVenta > 0 ? (gananciaUnitaria / precioVenta) * 100 : 0;
 
@@ -158,7 +169,7 @@ export default function Costos() {
         gananciaPeriodo,
       };
     });
-  }, [costosMap, ventasPorProducto]);
+  }, [costosMap, preciosMap, ventasPorProducto]);
 
   // Filtrado y ordenamiento de la tabla
   const productosFiltrados = useMemo(() => {
@@ -253,12 +264,34 @@ export default function Costos() {
     mostrarNotificacion('Costo de compra actualizado y guardado', 'success');
   };
 
+  // Guardar edición permanente de precio de venta de un producto
+  const guardarEdicionPrecio = (productoId) => {
+    const valorNum = parseFloat(nuevoPrecioTemp);
+    if (isNaN(valorNum) || valorNum < 0) {
+      mostrarNotificacion('Ingresa un precio de venta válido (ejemplo: 5.00)', 'error');
+      return;
+    }
+
+    actualizarPrecioBaseProducto(productoId, valorNum);
+    setEditandoPrecioProductoId(null);
+    setNuevoPrecioTemp('');
+    mostrarNotificacion('Precio de venta fijado en el menú correctamente', 'success');
+  };
+
   // Restaurar todos los costos a predeterminados de fábrica
   const restaurarCostosPredeterminados = () => {
     if (window.confirm('¿Deseas restaurar todos los costos de compra a sus valores iniciales sugeridos?')) {
       setCostosMap({ ...COSTOS_PREDETERMINADOS });
       guardarCostosProductos({ ...COSTOS_PREDETERMINADOS });
       mostrarNotificacion('Costos restaurados a valores predeterminados', 'info');
+    }
+  };
+
+  // Restaurar todos los precios de venta a predeterminados del menú
+  const restaurarPreciosPredeterminados = () => {
+    if (window.confirm('¿Deseas restaurar todos los precios de venta a los valores iniciales de la carta?')) {
+      restaurarPreciosBasePredeterminados();
+      mostrarNotificacion('Precios de venta restaurados a la carta original', 'info');
     }
   };
 
@@ -298,16 +331,26 @@ export default function Costos() {
           </div>
         </div>
 
-        {/* Botón Destacado PDF y Restaurar Costos */}
+        {/* Botón Destacado PDF, Restaurar Costos y Restaurar Precios */}
         <div className="flex flex-wrap items-center gap-2.5">
           <button
             type="button"
             onClick={restaurarCostosPredeterminados}
             className="px-3 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-slate-200 border border-slate-800 text-xs font-semibold transition-all flex items-center gap-1.5"
-            title="Restablecer costos iniciales sugeridos"
+            title="Restablecer costos de compra iniciales"
           >
             <RotateCcw className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">Restaurar Costos</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={restaurarPreciosPredeterminados}
+            className="px-3 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-amber-400/90 hover:text-amber-300 border border-slate-800 text-xs font-semibold transition-all flex items-center gap-1.5"
+            title="Restablecer precios de venta a la carta original"
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Restaurar Precios</span>
           </button>
 
           <button
@@ -695,7 +738,8 @@ export default function Costos() {
             </thead>
             <tbody className="divide-y divide-slate-800/60 bg-slate-900/40">
               {productosFiltrados.map((prod) => {
-                const estaEditando = editandoProductoId === prod.id;
+                const estaEditandoCosto = editandoProductoId === prod.id;
+                const estaEditandoPrecio = editandoPrecioProductoId === prod.id;
                 
                 // Color del badge de margen
                 const margenColor = prod.margenPorcentaje >= 50 
@@ -721,7 +765,7 @@ export default function Costos() {
 
                     {/* Costo de Compra (Editable) */}
                     <td className="py-3 px-3 text-right font-mono">
-                      {estaEditando ? (
+                      {estaEditandoCosto ? (
                         <div className="flex items-center justify-end gap-1">
                           <span className="text-slate-400">$</span>
                           <input
@@ -770,9 +814,55 @@ export default function Costos() {
                       )}
                     </td>
 
-                    {/* Precio de Venta */}
-                    <td className="py-3 px-3 text-right font-mono font-bold text-white">
-                      {formatearDinero(prod.precioVenta)}
+                    {/* Precio de Venta (Editable) */}
+                    <td className="py-3 px-3 text-right font-mono">
+                      {estaEditandoPrecio ? (
+                        <div className="flex items-center justify-end gap-1">
+                          <span className="text-slate-400">$</span>
+                          <input
+                            type="number"
+                            step="0.25"
+                            min="0"
+                            value={nuevoPrecioTemp}
+                            onChange={(e) => setNuevoPrecioTemp(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') guardarEdicionPrecio(prod.id);
+                              if (e.key === 'Escape') setEditandoPrecioProductoId(null);
+                            }}
+                            className="w-16 py-1 px-1.5 rounded-lg bg-slate-950 border border-amber-500 text-white font-mono text-xs focus:outline-none text-right font-bold"
+                            autoFocus
+                          />
+                          <button
+                            type="button"
+                            onClick={() => guardarEdicionPrecio(prod.id)}
+                            className="p-1 rounded-lg bg-emerald-500 text-slate-950 hover:bg-emerald-400"
+                            title="Guardar precio fijo"
+                          >
+                            <Check className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setEditandoPrecioProductoId(null)}
+                            className="p-1 rounded-lg bg-slate-800 text-slate-400 hover:text-white"
+                            title="Cancelar"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditandoPrecioProductoId(prod.id);
+                            setNuevoPrecioTemp(prod.precioVenta.toFixed(2));
+                          }}
+                          className="group inline-flex items-center gap-1.5 text-white font-bold hover:text-amber-400 px-2 py-1 rounded-lg hover:bg-slate-800 transition-colors"
+                          title="Haz clic para cambiar el precio de venta fijo en el menú"
+                        >
+                          <span>{formatearDinero(prod.precioVenta)}</span>
+                          <Edit3 className="w-3 h-3 text-slate-500 group-hover:text-amber-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                        </button>
+                      )}
                     </td>
 
                     {/* Margen Porcentual */}

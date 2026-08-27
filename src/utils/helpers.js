@@ -61,6 +61,17 @@ export const formatearFechaCorta = (fecha) => {
 };
 
 /**
+ * Formatea una fecha en formato "DD/MM/YYYY   día" (Ej: 27/08/2026   jueves)
+ */
+export const formatearFechaConDiaSemana = (fecha) => {
+  if (!fecha) return '';
+  const str = typeof fecha === 'string' && fecha.length === 10 ? `${fecha}T12:00:00` : fecha;
+  const fechaCorta = formatearFecha(str, 'dd/MM/yyyy');
+  const diaSemana = formatearFecha(str, 'EEEE');
+  return `${fechaCorta}   ${diaSemana}`;
+};
+
+/**
  * Formatea una fecha a formato amigable completo en español (Ej: Miércoles, 26 de agosto de 2026)
  */
 export const formatearDiaLegible = (fecha) => {

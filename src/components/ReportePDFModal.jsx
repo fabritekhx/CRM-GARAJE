@@ -7,17 +7,12 @@ import {
   Share2, 
   Coins, 
   CreditCard, 
-  TrendingUp, 
   Receipt,
   UtensilsCrossed, 
-  CheckCircle2,
   Calendar,
-  Sparkles,
   ArrowDownToLine,
-  Beer,
-  CupSoda,
-  Soup,
-  Layers
+  Layers,
+  Sparkles
 } from 'lucide-react';
 import { formatearDinero, formatearFecha, formatearDiaLegible } from '../utils/helpers';
 import { calcularMetricasReporte, descargarReportePDF, generarTextoReporteWhatsApp } from '../utils/pdfGenerator';
@@ -93,11 +88,11 @@ export default function ReportePDFModal({
                   PDF Oficial
                 </span>
               </div>
-              <p className="text-xs text-slate-400 mt-0.5 flex items-center gap-1.5">
+              <p className="text-xs text-slate-400 mt-0.5 flex items-center gap-1.5 capitalize">
                 <Calendar className="w-3.5 h-3.5 text-amber-400" />
                 <span>{fechaTexto}</span>
-                <span>•</span>
-                <span>{metricas.numPedidos} {metricas.numPedidos === 1 ? 'comanda registrada' : 'comandas registradas'}</span>
+                <span className="normal-case">•</span>
+                <span className="normal-case">{metricas.numPedidos} {metricas.numPedidos === 1 ? 'comanda registrada' : 'comandas registradas'}</span>
               </p>
             </div>
           </div>
@@ -114,8 +109,8 @@ export default function ReportePDFModal({
         {/* Contenido con Scroll */}
         <div className="p-5 sm:p-6 space-y-6 overflow-y-auto flex-1 text-slate-200">
 
-          {/* Bloque 1: Resumen de Métodos de Pago y Ganancia Neta */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+          {/* Bloque 1: Resumen de Métodos de Pago (Efectivo y Transferencias) */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
             {/* Efectivo */}
             <div className="p-4 rounded-2xl bg-slate-950/70 border border-emerald-500/30 shadow-lg flex flex-col justify-between">
               <div className="flex items-center justify-between">
@@ -123,49 +118,33 @@ export default function ReportePDFModal({
                 <Coins className="w-4 h-4 text-emerald-400" />
               </div>
               <div className="mt-2">
-                <span className="text-2xl font-black text-emerald-400 font-mono tracking-tight">
+                <span className="text-2xl sm:text-3xl font-black text-emerald-400 font-mono tracking-tight">
                   {formatearDinero(metricas.totalEfectivo)}
                 </span>
-                <p className="text-[11px] text-slate-400 mt-0.5">Recibido en billetes y monedas</p>
+                <p className="text-[11px] text-slate-400 mt-0.5">Recibido físicamente en caja</p>
               </div>
             </div>
 
             {/* Transferencias */}
             <div className="p-4 rounded-2xl bg-slate-950/70 border border-blue-500/30 shadow-lg flex flex-col justify-between">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Transferencias</span>
+                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Transferencias Bancarias</span>
                 <CreditCard className="w-4 h-4 text-blue-400" />
               </div>
               <div className="mt-2">
-                <span className="text-2xl font-black text-blue-400 font-mono tracking-tight">
+                <span className="text-2xl sm:text-3xl font-black text-blue-400 font-mono tracking-tight">
                   {formatearDinero(metricas.totalTransferencia)}
                 </span>
-                <p className="text-[11px] text-slate-400 mt-0.5">Comprobantes y bancos</p>
-              </div>
-            </div>
-
-            {/* Ganancia Neta Real */}
-            <div className="p-4 rounded-2xl bg-gradient-to-br from-amber-500/20 to-orange-500/10 border border-amber-500/50 shadow-lg shadow-amber-500/5 flex flex-col justify-between">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-amber-300 uppercase tracking-wider">Ganancia Neta Real</span>
-                <TrendingUp className="w-4 h-4 text-amber-400" />
-              </div>
-              <div className="mt-2">
-                <span className="text-2xl font-black text-amber-400 font-mono tracking-tight">
-                  {formatearDinero(metricas.gananciaNetaTotal)}
-                </span>
-                <p className="text-[11px] text-amber-200/80 mt-0.5">
-                  Margen: {metricas.margenPromedio.toFixed(1)}% de ganancia
-                </p>
+                <p className="text-[11px] text-slate-400 mt-0.5">Verificadas en banco y comprobantes</p>
               </div>
             </div>
           </div>
 
-          {/* Bloque 2: Balance Rápido Venta vs Compra */}
+          {/* Bloque 2: Balance Rápido */}
           <div className="p-3.5 rounded-2xl bg-slate-950/50 border border-slate-800 flex flex-wrap items-center justify-between gap-3 text-xs">
             <div className="flex items-center gap-2">
               <Receipt className="w-4 h-4 text-slate-400" />
-              <span className="text-slate-400">Total Venta Bruta:</span>
+              <span className="text-slate-400">Total Facturado:</span>
               <strong className="text-white font-mono text-sm">{formatearDinero(metricas.totalVentas)}</strong>
             </div>
             <div className="flex items-center gap-2">
@@ -173,105 +152,153 @@ export default function ReportePDFModal({
               <strong className="text-rose-400 font-mono text-sm">{formatearDinero(metricas.totalCostoInsumos)}</strong>
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-slate-400">Total Comandas:</span>
-              <strong className="text-amber-400 font-mono text-sm">{metricas.numPedidos} pedidos</strong>
+              <span className="text-slate-400">Ganancia Neta:</span>
+              <strong className="text-emerald-400 font-mono text-sm">{formatearDinero(metricas.gananciaNetaTotal)}</strong>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-slate-400">Comandas:</span>
+              <strong className="text-amber-400 font-mono text-sm">{metricas.numPedidos}</strong>
             </div>
           </div>
 
-          {/* Bloque 3: Desglose por Categorías Solicitadas (Porciones, Cervezas, Colas, etc.) */}
-          <div>
-            <h3 className="text-sm font-extrabold text-white mb-3 flex items-center gap-2">
-              <UtensilsCrossed className="w-4 h-4 text-amber-400" />
-              <span>Desglose y Ganancias por Categoría:</span>
-            </h3>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {metricas.categoriasLista.map((cat) => (
-                <div 
-                  key={cat.id} 
-                  className="p-3.5 rounded-2xl bg-slate-950/60 border border-slate-800 hover:border-slate-700 transition-colors flex flex-col justify-between"
-                >
-                  <div className="flex items-center justify-between gap-2 mb-2">
-                    <span className="font-bold text-xs text-white truncate">{cat.nombre}</span>
-                    <span className="px-2 py-0.5 rounded-lg bg-slate-800 text-[11px] font-bold text-slate-300 shrink-0">
-                      {cat.cantidad} {cat.cantidad === 1 ? 'unidad' : 'unidades'}
-                    </span>
-                  </div>
-
-                  <div className="grid grid-cols-3 gap-2 pt-2 border-t border-slate-800/80 text-xs">
-                    <div>
-                      <span className="text-[10px] text-slate-400 block">Venta</span>
-                      <span className="font-mono font-bold text-slate-200">{formatearDinero(cat.venta)}</span>
-                    </div>
-                    <div>
-                      <span className="text-[10px] text-slate-400 block">Costo</span>
-                      <span className="font-mono font-bold text-amber-400/90">{formatearDinero(cat.costo)}</span>
-                    </div>
-                    <div className="text-right">
-                      <span className="text-[10px] text-emerald-400 font-bold block">Ganancia</span>
-                      <span className="font-mono font-black text-emerald-400">{formatearDinero(cat.ganancia)}</span>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Bloque 4: Previsualización de Tabla de Productos */}
-          <div>
-            <div className="flex items-center justify-between mb-3">
+          {/* Bloque 3: Tablas por Cada Categoría y sus Productos */}
+          <div className="space-y-5">
+            <div className="flex items-center justify-between">
               <h3 className="text-sm font-extrabold text-white flex items-center gap-2">
-                <Layers className="w-4 h-4 text-amber-400" />
-                <span>Detalle Ítem por Ítem ({metricas.productosLista.length} productos vendidos):</span>
+                <UtensilsCrossed className="w-4 h-4 text-amber-400" />
+                <span>Detalle Organizado por Categorías y Productos:</span>
               </h3>
             </div>
 
-            <div className="overflow-x-auto rounded-2xl border border-slate-800 max-h-60 overflow-y-auto">
-              <table className="w-full text-left text-xs border-collapse">
-                <thead className="sticky top-0 bg-slate-850 text-slate-400 uppercase text-[10px] font-bold tracking-wider border-b border-slate-800">
-                  <tr>
-                    <th className="py-2.5 px-3">Producto</th>
-                    <th className="py-2.5 px-2 text-center">Cant.</th>
-                    <th className="py-2.5 px-2 text-right">P. Venta</th>
-                    <th className="py-2.5 px-2 text-right">P. Compra</th>
-                    <th className="py-2.5 px-2 text-right">Total Venta</th>
-                    <th className="py-2.5 px-3 text-right">Ganancia Neta</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-800/60 bg-slate-900/60">
-                  {metricas.productosLista.map((prod, idx) => (
-                    <tr key={idx} className="hover:bg-slate-800/40 transition-colors">
-                      <td className="py-2 px-3 font-semibold text-slate-200">
-                        {prod.nombre} {prod.variante && <span className="text-[10px] text-amber-400">({prod.variante})</span>}
-                      </td>
-                      <td className="py-2 px-2 text-center font-bold text-slate-300">
-                        {prod.cantidad}
-                      </td>
-                      <td className="py-2 px-2 text-right font-mono text-slate-300">
-                        {formatearDinero(prod.precioUnitario)}
-                      </td>
-                      <td className="py-2 px-2 text-right font-mono text-slate-400">
-                        {formatearDinero(prod.costoUnitario)}
-                      </td>
-                      <td className="py-2 px-2 text-right font-mono font-bold text-slate-100">
-                        {formatearDinero(prod.totalVenta)}
-                      </td>
-                      <td className="py-2 px-3 text-right font-mono font-black text-emerald-400">
-                        +{formatearDinero(prod.gananciaTotal)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            {metricas.categoriasLista.length === 0 ? (
+              <div className="p-8 rounded-2xl border border-slate-800 text-center text-slate-500">
+                No hay pedidos registrados en este período.
+              </div>
+            ) : (
+              metricas.categoriasLista.map((cat, idx) => (
+                <div key={cat.id} className="rounded-2xl border border-slate-800 overflow-hidden bg-slate-950/40">
+                  {/* Encabezado de la Categoría */}
+                  <div className="px-4 py-2.5 bg-slate-850 border-b border-slate-800 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-amber-400" />
+                      <h4 className="text-xs font-black text-white uppercase tracking-wider">
+                        {idx + 1}. {cat.nombre}
+                      </h4>
+                    </div>
+                    <span className="text-[11px] font-bold text-amber-400">
+                      {cat.cantidad} {cat.cantidad === 1 ? 'unidad vendida' : 'unidades vendidas'}
+                    </span>
+                  </div>
+
+                  {/* Tabla de Productos de la Categoría */}
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs border-collapse">
+                      <thead className="bg-slate-900/90 text-slate-400 uppercase text-[10px] font-bold tracking-wider border-b border-slate-800">
+                        <tr>
+                          <th className="py-2 px-3">Producto</th>
+                          <th className="py-2 px-2 text-center">Cant.</th>
+                          <th className="py-2 px-2 text-right">P. Venta</th>
+                          <th className="py-2 px-2 text-right">P. Compra</th>
+                          <th className="py-2 px-2 text-right">Total Venta</th>
+                          <th className="py-2 px-2 text-right">Total Costo</th>
+                          <th className="py-2 px-3 text-right">Ganancia Neta</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-800/50 bg-slate-900/30">
+                        {cat.productos.map((prod, pIdx) => (
+                          <tr key={pIdx} className="hover:bg-slate-800/40 transition-colors">
+                            <td className="py-2 px-3 font-semibold text-slate-200">
+                              {prod.nombre} {prod.variante && <span className="text-[10px] text-amber-400">({prod.variante})</span>}
+                            </td>
+                            <td className="py-2 px-2 text-center font-bold text-slate-300">
+                              {prod.cantidad}
+                            </td>
+                            <td className="py-2 px-2 text-right font-mono text-slate-300">
+                              {formatearDinero(prod.precioUnitario)}
+                            </td>
+                            <td className="py-2 px-2 text-right font-mono text-slate-400">
+                              {formatearDinero(prod.costoUnitario)}
+                            </td>
+                            <td className="py-2 px-2 text-right font-mono font-bold text-slate-100">
+                              {formatearDinero(prod.totalVenta)}
+                            </td>
+                            <td className="py-2 px-2 text-right font-mono text-amber-400/90">
+                              {formatearDinero(prod.totalCosto)}
+                            </td>
+                            <td className="py-2 px-3 text-right font-mono font-black text-emerald-400">
+                              +{formatearDinero(prod.gananciaTotal)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      {/* Subtotal de la Categoría */}
+                      <tfoot className="bg-slate-850/90 font-bold border-t border-slate-800 text-xs">
+                        <tr>
+                          <td className="py-2 px-3 text-slate-300 uppercase text-[11px]">
+                            Subtotal {cat.nombre}
+                          </td>
+                          <td className="py-2 px-2 text-center text-amber-400 font-mono font-bold">
+                            {cat.cantidad}
+                          </td>
+                          <td colSpan={2} className="py-2 px-2"></td>
+                          <td className="py-2 px-2 text-right text-white font-mono">
+                            {formatearDinero(cat.totalVenta)}
+                          </td>
+                          <td className="py-2 px-2 text-right text-amber-400 font-mono">
+                            {formatearDinero(cat.totalCosto)}
+                          </td>
+                          <td className="py-2 px-3 text-right text-emerald-400 font-mono font-black">
+                            +{formatearDinero(cat.gananciaTotal)}
+                          </td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                </div>
+              ))
+            )}
           </div>
+
+          {/* Bloque 4: Gran Total General */}
+          {metricas.categoriasLista.length > 0 && (
+            <div className="p-4 rounded-2xl bg-gradient-to-r from-slate-900 via-slate-850 to-slate-900 border border-amber-500/40 flex flex-wrap items-center justify-between gap-4">
+              <div>
+                <span className="text-xs uppercase font-extrabold text-amber-400 tracking-wider block">
+                  Gran Total General
+                </span>
+                <span className="text-xs text-slate-400">
+                  Suma acumulada de todas las categorías
+                </span>
+              </div>
+              <div className="flex items-center gap-4 sm:gap-6 text-right">
+                <div>
+                  <span className="text-[10px] text-slate-400 uppercase font-bold block">Total Venta</span>
+                  <span className="text-base sm:text-lg font-mono font-black text-white">
+                    {formatearDinero(metricas.totalVentas)}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-rose-400 uppercase font-bold block">Total Insumos</span>
+                  <span className="text-base sm:text-lg font-mono font-bold text-rose-400">
+                    {formatearDinero(metricas.totalCostoInsumos)}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-[10px] text-emerald-400 uppercase font-bold block">Ganancia Neta</span>
+                  <span className="text-lg sm:text-xl font-mono font-black text-emerald-400">
+                    +{formatearDinero(metricas.gananciaNetaTotal)}
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
 
         </div>
 
         {/* Barra de Acciones / Botones Inferiores */}
         <div className="p-4 sm:p-5 border-t border-slate-800 bg-slate-950 flex flex-col sm:flex-row items-center justify-between gap-3">
           <p className="text-xs text-slate-400 text-center sm:text-left">
-            El PDF incluye todos los membretes, sellos, firmas y formato imprimible en hoja A4.
+            El PDF incluye los cuadros por categoría, membretes oficiales y formato A4.
           </p>
 
           <div className="flex items-center gap-2 w-full sm:w-auto justify-end">

@@ -29,6 +29,13 @@ import {
   SUPABASE_URL
 } from '../supabase/client';
 import { fusionarMesasInteligente, calcularUltimoNumeroOrdenDelDia } from '../utils/helpers';
+import { 
+  obtenerPreciosProductos, 
+  guardarPreciosProductos, 
+  actualizarPrecioProducto as actualizarPrecioProductoHelper, 
+  restaurarPreciosPredeterminados as restaurarPreciosPredeterminadosHelper,
+  obtenerMenuConPreciosActualizados
+} from '../data/precios';
 import confetti from 'canvas-confetti';
 
 const PedidoContext = createContext();
@@ -96,6 +103,9 @@ export const PedidoProvider = ({ children }) => {
       return [];
     }
   });
+
+  // Mapa de Precios de Venta Personalizados y Persistentes
+  const [preciosMap, setPreciosMap] = useState(() => obtenerPreciosProductos());
 
   // Consecutivo de orden diario (inicia en 0 al iniciar el día para que la primera orden sea la #1)
   const [ultimoNumeroOrden, setUltimoNumeroOrden] = useState(() => {
@@ -393,6 +403,10 @@ export const PedidoProvider = ({ children }) => {
             setUltimoNumeroOrden((prev) => Math.max(prev, event.data.ultimoNumeroOrden));
           }
         }
+
+        if (event.data?.tipo === 'SYNC_PRECIOS' && event.data.precios) {
+          setPreciosMap(event.data.precios);
+        }
       };
     }
 
@@ -605,6 +619,10 @@ export const PedidoProvider = ({ children }) => {
     lastLocalMutationTimestampRef.current = Date.now();
     if (!mesaSeleccionada) return;
 
+    const precioBaseActivo = preciosMap[producto.id] !== undefined ? Number(preciosMap[producto.id]) : Number(producto.precioBase);
+    const precioFinal = precioPersonalizado !== null ? Number(precioPersonalizado) : precioBaseActivo;
+    const varianteStr = variante || '';
+
     setMesas((prev) =>
       prev.map((m) => {
         if (m.numero !== mesaSeleccionada) return m;
@@ -618,9 +636,6 @@ export const PedidoProvider = ({ children }) => {
           total: 0,
           estado: 'activo',
         };
-
-        const precioFinal = precioPersonalizado !== null ? Number(precioPersonalizado) : Number(producto.precioBase);
-        const varianteStr = variante || '';
 
         // Buscar si ya existe el mismo producto con la misma variante y MISMO precio unitario
         const indexExistente = pedido.productos.findIndex(
@@ -665,7 +680,7 @@ export const PedidoProvider = ({ children }) => {
       })
     );
 
-    mostrarNotificacion(`Agregado: ${producto.nombre} ${variante ? `(${variante})` : ''} - $${(precioPersonalizado !== null ? Number(precioPersonalizado) : Number(producto.precioBase)).toFixed(2)}`, 'success');
+    mostrarNotificacion(`Agregado: ${producto.nombre} ${variante ? `(${variante})` : ''} - $${precioFinal.toFixed(2)}`, 'success');
   };
 
   // Cambiar cantidad de un producto
@@ -761,10 +776,12 @@ export const PedidoProvider = ({ children }) => {
     );
   };
 
-  // Actualizar precio de un ítem individual
-  const actualizarPrecioItem = (itemIndex, nuevoPrecio) => {
+  // Actualizar precio de un ítem individual (y opcionalmente fijarlo como precio base permanente)
+  const actualizarPrecioItem = (itemIndex, nuevoPrecio, guardarComoPrecioFijo = false) => {
     lastLocalMutationTimestampRef.current = Date.now();
     if (!mesaSeleccionada) return;
+
+    const precioNum = Math.max(0, parseFloat(nuevoPrecio) || 0);
 
     setMesas((prev) =>
       prev.map((m) => {
@@ -772,11 +789,16 @@ export const PedidoProvider = ({ children }) => {
 
         const nuevosProductos = [...m.pedidoActual.productos];
         if (nuevosProductos[itemIndex]) {
-          const precioNum = Math.max(0, parseFloat(nuevoPrecio) || 0);
+          const item = nuevosProductos[itemIndex];
           nuevosProductos[itemIndex] = {
-            ...nuevosProductos[itemIndex],
+            ...item,
             precioUnitario: precioNum,
           };
+
+          // Si se solicitó fijar como precio permanente del catálogo
+          if (guardarComoPrecioFijo && item.productoId) {
+            actualizarPrecioBaseProducto(item.productoId, precioNum);
+          }
         }
 
         const totalActualizado = calcularTotal(nuevosProductos);
@@ -792,6 +814,43 @@ export const PedidoProvider = ({ children }) => {
         };
       })
     );
+  };
+
+  // Actualizar precio base de venta de un producto y persistirlo permanentemente
+  const actualizarPrecioBaseProducto = (productoId, nuevoPrecio) => {
+    const precioNum = Math.max(0, parseFloat(nuevoPrecio) || 0);
+    const mapaActualizado = actualizarPrecioProductoHelper(productoId, precioNum);
+    setPreciosMap(mapaActualizado);
+
+    if (localBroadcastChannel) {
+      localBroadcastChannel.postMessage({
+        tipo: 'SYNC_PRECIOS',
+        precios: mapaActualizado,
+        senderId: clientIdRef.current,
+      });
+    }
+
+    const itemMenu = MENU.find((m) => m.id === productoId);
+    const nombreProd = itemMenu ? itemMenu.nombre : 'Producto';
+    mostrarNotificacion(`Precio fijo guardado: ${nombreProd} a $${precioNum.toFixed(2)}`, 'success');
+    return mapaActualizado;
+  };
+
+  // Restaurar todos los precios de venta a los valores iniciales predeterminados
+  const restaurarPreciosBasePredeterminados = () => {
+    const mapaPredeterminado = restaurarPreciosPredeterminadosHelper();
+    setPreciosMap(mapaPredeterminado);
+
+    if (localBroadcastChannel) {
+      localBroadcastChannel.postMessage({
+        tipo: 'SYNC_PRECIOS',
+        precios: mapaPredeterminado,
+        senderId: clientIdRef.current,
+      });
+    }
+
+    mostrarNotificacion('Precios de venta restaurados a los valores predeterminados', 'info');
+    return mapaPredeterminado;
   };
 
   // Actualizar notas generales del pedido
@@ -1268,6 +1327,9 @@ export const PedidoProvider = ({ children }) => {
         notificacion,
         diaSeleccionado,
         setDiaSeleccionado,
+        preciosMap,
+        actualizarPrecioBaseProducto,
+        restaurarPreciosBasePredeterminados,
         supabaseProjectName: SUPABASE_PROJECT_NAME,
         supabaseProjectId: SUPABASE_PROJECT_ID,
         supabaseUrl: SUPABASE_URL,

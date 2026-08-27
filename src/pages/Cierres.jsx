@@ -19,7 +19,7 @@ import {
   Layers
 } from 'lucide-react';
 import { usePedidos } from '../context/PedidoContext';
-import { formatearDinero, formatearFecha, formatearFechaCorta } from '../utils/helpers';
+import { formatearDinero, formatearFecha, formatearFechaCorta, formatearFechaConDiaSemana } from '../utils/helpers';
 import FirebaseModal from '../components/FirebaseModal';
 import ReportePDFModal from '../components/ReportePDFModal';
 
@@ -207,8 +207,8 @@ export default function Cierres() {
                 </span>
               )}
             </div>
-            <h2 className="text-lg sm:text-xl font-bold text-white mt-0.5">
-              Ventas del {fechaCierre}
+            <h2 className="text-lg sm:text-xl font-bold text-white mt-0.5 capitalize">
+              Ventas del {formatearFechaConDiaSemana(fechaCierre)}
             </h2>
           </div>
 
@@ -371,8 +371,8 @@ export default function Cierres() {
                     <tr key={cierre.id} className="hover:bg-slate-800/50 transition-colors">
                       
                       <td className="py-3.5 px-4 font-mono font-bold text-white flex items-center gap-2">
-                        <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                        <span>{cierre.id}</span>
+                        <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                        <span className="capitalize">{formatearFechaConDiaSemana(cierre.id || cierre.fecha)}</span>
                       </td>
 
                       <td className="py-3.5 px-4">
@@ -429,8 +429,8 @@ export default function Cierres() {
             <div className="px-6 py-4 bg-slate-850 border-b border-slate-800 flex items-center justify-between">
               <div className="flex items-center gap-2.5">
                 <Calculator className="w-5 h-5 text-amber-400" />
-                <h3 className="font-bold text-base text-white">
-                  Reporte de Cierre de Caja - {cierreSeleccionadoDetalle.id}
+                <h3 className="font-bold text-base text-white capitalize">
+                  Reporte de Cierre de Caja - {formatearFechaConDiaSemana(cierreSeleccionadoDetalle.id || cierreSeleccionadoDetalle.fecha)}
                 </h3>
               </div>
               <button
@@ -512,7 +512,7 @@ export default function Cierres() {
         onClose={() => setIsPDFModalOpen(false)}
         pedidos={resumenVivo.pedidos}
         titulo="Reporte Detallado de Cierre de Caja"
-        subtituloFecha={fechaCierre}
+        subtituloFecha={formatearFechaConDiaSemana(fechaCierre)}
         fechaReporte={fechaCierre}
       />
 

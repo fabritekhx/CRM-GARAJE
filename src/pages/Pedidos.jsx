@@ -478,69 +478,6 @@ export default function Pedidos() {
 
       </div>
 
-      {/* Tarjetas de Resumen de lo Vendido en el Día / Filtro Seleccionado */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        
-        {/* Total Órdenes del Día */}
-        <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-amber-400 uppercase tracking-wider">
-              {modoFecha === 'dia' ? 'Órdenes del Día' : 'Total Órdenes'}
-            </span>
-            <Receipt className="w-4 h-4 text-amber-400" />
-          </div>
-          <div className="text-2xl sm:text-3xl font-black text-white font-mono mt-1">
-            {pedidosConOrdenDelDia.length}
-          </div>
-          <span className="text-[11px] text-slate-400 mt-0.5 block">
-            {modoFecha === 'dia' 
-              ? (pedidosConOrdenDelDia.length > 0 ? `Orden #1 hasta #${pedidosConOrdenDelDia.length}` : 'Sin órdenes hoy')
-              : `${totalPlatosVendidos} productos entregados`
-            }
-          </span>
-        </div>
-
-        {/* Total Vendido */}
-        <div className="p-4 rounded-2xl bg-gradient-to-br from-amber-500/15 via-slate-800 to-slate-900 border border-amber-500/30">
-          <span className="text-xs font-bold text-amber-400 uppercase tracking-wider">Total Facturado</span>
-          <div className="text-2xl sm:text-3xl font-black text-amber-400 font-mono mt-1">
-            {formatearDinero(totalVentas)}
-          </div>
-          <span className="text-[11px] text-slate-400 mt-0.5 block">
-            {pedidosFiltrados.length > 0 ? `Promedio ${formatearDinero(totalVentas / pedidosFiltrados.length)}/orden` : '$0.00'}
-          </span>
-        </div>
-
-        {/* En Efectivo */}
-        <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-emerald-400 uppercase tracking-wider">En Efectivo</span>
-            <Coins className="w-4 h-4 text-emerald-400" />
-          </div>
-          <div className="text-2xl sm:text-3xl font-black text-emerald-400 font-mono mt-1">
-            {formatearDinero(totalEfectivo)}
-          </div>
-          <span className="text-[11px] text-slate-400 mt-0.5 block">
-            {totalVentas > 0 ? `${((totalEfectivo / totalVentas) * 100).toFixed(0)}% de los ingresos` : '$0.00'}
-          </span>
-        </div>
-
-        {/* En Transferencias */}
-        <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-cyan-400 uppercase tracking-wider">Transferencias</span>
-            <CreditCard className="w-4 h-4 text-cyan-400" />
-          </div>
-          <div className="text-2xl sm:text-3xl font-black text-cyan-400 font-mono mt-1">
-            {formatearDinero(totalTransferencia)}
-          </div>
-          <span className="text-[11px] text-slate-400 mt-0.5 block">
-            {totalVentas > 0 ? `${((totalTransferencia / totalVentas) * 100).toFixed(0)}% de los ingresos` : '$0.00'}
-          </span>
-        </div>
-
-      </div>
-
       {/* Tabla de Pedidos y Detalles de Venta */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
         <div className="p-4 border-b border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">

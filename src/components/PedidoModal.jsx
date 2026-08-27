@@ -46,6 +46,7 @@ export default function PedidoModal() {
   const [tempNote, setTempNote] = useState('');
   const [editingPriceIndex, setEditingPriceIndex] = useState(null);
   const [tempPrice, setTempPrice] = useState('');
+  const [guardarComoFijo, setGuardarComoFijo] = useState(true);
 
   if (!isPedidoModalOpen || !mesaSeleccionada) return null;
 
@@ -70,7 +71,7 @@ export default function PedidoModal() {
   const handleGuardarPrecioItem = (index) => {
     const num = parseFloat(tempPrice);
     if (!isNaN(num) && num >= 0) {
-      actualizarPrecioItem(index, num);
+      actualizarPrecioItem(index, num, guardarComoFijo);
     }
     setEditingPriceIndex(null);
     setTempPrice('');
@@ -284,36 +285,50 @@ export default function PedidoModal() {
                       </div>
                     </div>
 
-                    {/* Formulario rápido para editar precio / otro valor */}
+                    {/* Formulario rápido para editar precio / fijar precio permanente */}
                     {editingPriceIndex === index && (
-                      <div className="pt-2 flex items-center gap-2 bg-slate-900/90 p-2 rounded-lg border border-amber-500/30">
-                        <span className="text-xs font-bold text-amber-400 font-mono">$</span>
-                        <input
-                          type="number"
-                          step="0.25"
-                          min="0"
-                          inputMode="decimal"
-                          value={tempPrice}
-                          onChange={(e) => setTempPrice(e.target.value)}
-                          placeholder="0.00"
-                          className="w-24 px-2 py-1 bg-slate-950 border border-slate-700 rounded-lg text-xs font-bold font-mono text-white focus:outline-none focus:border-amber-500"
-                          autoFocus
-                        />
-                        <button
-                          type="button"
-                          onClick={() => handleGuardarPrecioItem(index)}
-                          className="px-2 py-1 bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold rounded-lg flex items-center gap-1"
-                        >
-                          <Check className="w-3.5 h-3.5" />
-                          <span>Guardar</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setEditingPriceIndex(null)}
-                          className="p-1 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg"
-                        >
-                          <X className="w-3.5 h-3.5" />
-                        </button>
+                      <div className="pt-2 bg-slate-900/95 p-2.5 rounded-xl border border-amber-500/40 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[11px] font-bold text-amber-300">Modificar precio de venta:</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-bold text-amber-400 font-mono">$</span>
+                          <input
+                            type="number"
+                            step="0.25"
+                            min="0"
+                            inputMode="decimal"
+                            value={tempPrice}
+                            onChange={(e) => setTempPrice(e.target.value)}
+                            placeholder="0.00"
+                            className="w-24 px-2 py-1.5 bg-slate-950 border border-slate-700 rounded-lg text-xs font-bold font-mono text-white focus:outline-none focus:border-amber-500"
+                            autoFocus
+                          />
+                          <button
+                            type="button"
+                            onClick={() => handleGuardarPrecioItem(index)}
+                            className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold rounded-lg flex items-center gap-1 shadow-sm"
+                          >
+                            <Check className="w-3.5 h-3.5" />
+                            <span>Guardar</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setEditingPriceIndex(null)}
+                            className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                        <label className="flex items-center gap-2 text-[11px] text-slate-300 font-medium cursor-pointer pt-0.5 select-none">
+                          <input
+                            type="checkbox"
+                            checked={guardarComoFijo}
+                            onChange={(e) => setGuardarComoFijo(e.target.checked)}
+                            className="rounded border-slate-700 text-amber-500 focus:ring-amber-500 bg-slate-950"
+                          />
+                          <span>Dejar este precio fijo en el menú hasta cambiarlo de nuevo</span>
+                        </label>
                       </div>
                     )}
 

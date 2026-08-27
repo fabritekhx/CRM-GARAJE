@@ -23,7 +23,8 @@ export default function MenuPanel() {
     agregarProductoAPedido, 
     mesaSeleccionada, 
     diaSeleccionado, 
-    setDiaSeleccionado 
+    setDiaSeleccionado,
+    preciosMap 
   } = usePedidos();
   
   const [categoriaActiva, setCategoriaActiva] = useState(() => {
@@ -84,6 +85,10 @@ export default function MenuPanel() {
   const handleSeleccionarProducto = (prod) => {
     if (!mesaSeleccionada) return;
 
+    const precioBaseActivo = preciosMap && preciosMap[prod.id] !== undefined 
+      ? Number(preciosMap[prod.id]) 
+      : Number(prod.precioBase);
+
     if (prod.tipoVariante === 'tamano_pescado') {
       // Pescados: Abre modal con los valores $4.00, $5.00, $6.00 y la opción de "Otro valor"
       setProductoParaVariante(prod);
@@ -95,18 +100,18 @@ export default function MenuPanel() {
     } else if (prod.tipoVariante === 'sabor' && prod.sabores?.length > 0) {
       if (prod.sabores.length === 1) {
         // Un solo sabor se agrega directamente
-        agregarProductoAPedido(prod, prod.sabores[0], prod.precioBase);
+        agregarProductoAPedido(prod, prod.sabores[0], precioBaseActivo);
       } else {
         // Múltiples sabores: modal para elegir sabor
         setProductoParaVariante(prod);
         setVarianteSeleccionada(prod.sabores[0]);
-        setPrecioSeleccionado(prod.precioBase);
+        setPrecioSeleccionado(precioBaseActivo);
         setEsOtroValor(false);
         setNotasVariante('');
       }
     } else {
       // Platos principales y porciones directas (Fritadas, Caldos, Encebollados, Corvina, Camarón, Combos, etc.)
-      agregarProductoAPedido(prod, null, prod.precioBase);
+      agregarProductoAPedido(prod, null, precioBaseActivo);
     }
   };
 
@@ -239,6 +244,9 @@ export default function MenuPanel() {
           <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {productosFiltrados.map((prod) => {
               const tieneVariante = prod.tipoVariante !== null;
+              const precioBaseActivo = preciosMap && preciosMap[prod.id] !== undefined 
+                ? Number(preciosMap[prod.id]) 
+                : Number(prod.precioBase);
               
               return (
                 <div
@@ -267,7 +275,7 @@ export default function MenuPanel() {
                         </span>
                       ) : (
                         <span className="text-xs sm:text-sm font-extrabold text-amber-400 font-mono">
-                          {formatearDinero(prod.precioBase)}
+                          {formatearDinero(precioBaseActivo)}
                         </span>
                       )}
                     </div>
