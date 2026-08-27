@@ -331,28 +331,8 @@ export default function Costos() {
           </div>
         </div>
 
-        {/* Botón Destacado PDF, Restaurar Costos y Restaurar Precios */}
+        {/* Botón Destacado PDF */}
         <div className="flex flex-wrap items-center gap-2.5">
-          <button
-            type="button"
-            onClick={restaurarCostosPredeterminados}
-            className="px-3 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-slate-200 border border-slate-800 text-xs font-semibold transition-all flex items-center gap-1.5"
-            title="Restablecer costos de compra iniciales"
-          >
-            <RotateCcw className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Restaurar Costos</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={restaurarPreciosPredeterminados}
-            className="px-3 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-amber-400/90 hover:text-amber-300 border border-slate-800 text-xs font-semibold transition-all flex items-center gap-1.5"
-            title="Restablecer precios de venta a la carta original"
-          >
-            <RotateCcw className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Restaurar Precios</span>
-          </button>
-
           <button
             type="button"
             onClick={() => setIsPDFModalOpen(true)}
