@@ -20,7 +20,10 @@ import {
   ShoppingBag,
   Clock,
   CheckCircle2,
-  CalendarDays
+  CalendarDays,
+  ArrowUpDown,
+  ArrowUpWideNarrow,
+  ArrowDownWideNarrow
 } from 'lucide-react';
 import { usePedidos } from '../context/PedidoContext';
 import { 
@@ -61,6 +64,9 @@ export default function Pedidos() {
     return d.toISOString().split('T')[0];
   });
   const [fechaFin, setFechaFin] = useState(() => new Date().toISOString().split('T')[0]);
+
+  // Dirección de ordenamiento: 'asc' (Primero al Último / Orden #1 primero) | 'desc' (Último al Primero / Más reciente primero)
+  const [ordenDireccion, setOrdenDireccion] = useState('asc');
 
   const [pedidoAEliminar, setPedidoAEliminar] = useState(null);
 
@@ -152,8 +158,11 @@ export default function Pedidos() {
     });
   }, [pedidosHistorial, modoFecha, fechaSeleccionada, fechaInicio, fechaFin, filtroMetodo, busqueda]);
 
-  // Si estamos en modo de 1 solo día, ordenar cronológicamente ascendente para asignar y mostrar la correlación diaria #1, #2...
-  // Si estamos en modo de todos/rango, ordenar por fecha descendente (más recientes primero)
+  // Si estamos en modo de 1 solo día:
+  // 1. Asignamos primero la numeración correlativa del día en orden cronológico (#1 al inicio, #2 después...)
+  // 2. Luego ordenamos según `ordenDireccion`:
+  //    - 'asc': Del primero al último (#1, #2, #3...)
+  //    - 'desc': Del último al primero (la orden más reciente primero, conservando su # correlativo)
   const pedidosConOrdenDelDia = useMemo(() => {
     if (modoFecha === 'dia') {
       // Ordenar por hora/fecha ascendente para que la primera orden del día sea la #1
@@ -164,21 +173,27 @@ export default function Pedidos() {
       });
 
       // Mapear con su correlativo diario exacto (1..N)
-      return ordenadosAsc.map((p, idx) => ({
+      const mapeados = ordenadosAsc.map((p, idx) => ({
         ...p,
         ordenCorrelativaDia: idx + 1,
         // Usar numeroOrden registrado o fallback a correlativo
         ordenMostrar: p.numeroOrden ? Number(p.numeroOrden) : (idx + 1)
       }));
+
+      // Si el usuario seleccionó de último a primero, invertimos el array
+      if (ordenDireccion === 'desc') {
+        return [...mapeados].reverse();
+      }
+      return mapeados;
     }
 
-    // Modo rango o todo: ordenar por fecha más reciente primero
+    // Modo rango o todo:
     return [...pedidosFiltrados].sort((a, b) => {
       const timeA = new Date(a.fecha).getTime() || 0;
       const timeB = new Date(b.fecha).getTime() || 0;
-      return timeB - timeA;
+      return ordenDireccion === 'asc' ? timeA - timeB : timeB - timeA;
     });
-  }, [pedidosFiltrados, modoFecha]);
+  }, [pedidosFiltrados, modoFecha, ordenDireccion]);
 
   // Cálculos de métricas del conjunto filtrado
   const totalVentas = pedidosFiltrados.reduce((sum, p) => sum + (Number(p.total) || 0), 0);
@@ -512,7 +527,7 @@ export default function Pedidos() {
 
       {/* Tabla de Pedidos y Detalles de Venta */}
       <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
-        <div className="p-4 border-b border-slate-800 flex items-center justify-between">
+        <div className="p-4 border-b border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <ShoppingBag className="w-4 h-4 text-amber-400" />
             <h3 className="font-bold text-white text-sm">
@@ -522,9 +537,48 @@ export default function Pedidos() {
               }
             </h3>
           </div>
-          <span className="text-xs font-semibold text-slate-400">
-            {pedidosConOrdenDelDia.length} {pedidosConOrdenDelDia.length === 1 ? 'pedido' : 'pedidos'}
-          </span>
+
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Control de Orden: Primero a Último vs Último a Primero */}
+            <div className="flex items-center bg-slate-950/80 p-1 rounded-xl border border-slate-800">
+              <span className="text-[11px] font-semibold text-slate-400 px-2 hidden md:inline-flex items-center gap-1">
+                <ArrowUpDown className="w-3 h-3 text-amber-400" />
+                <span>Ordenar:</span>
+              </span>
+
+              <button
+                type="button"
+                onClick={() => setOrdenDireccion('asc')}
+                className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                  ordenDireccion === 'asc'
+                    ? 'bg-amber-500 text-slate-950 shadow-sm shadow-amber-500/20 font-black'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+                title="Mostrar en orden cronológico: Primero al Último (Orden #1, #2, #3...)"
+              >
+                <ArrowUpWideNarrow className="w-3.5 h-3.5" />
+                <span>Primero al Último</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setOrdenDireccion('desc')}
+                className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                  ordenDireccion === 'desc'
+                    ? 'bg-amber-500 text-slate-950 shadow-sm shadow-amber-500/20 font-black'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+                title="Mostrar las órdenes más recientes arriba: Último al Primero"
+              >
+                <ArrowDownWideNarrow className="w-3.5 h-3.5" />
+                <span>Último al Primero</span>
+              </button>
+            </div>
+
+            <span className="text-xs font-bold text-slate-300 bg-slate-800/90 px-3 py-1.5 rounded-xl border border-slate-700/80 shrink-0">
+              {pedidosConOrdenDelDia.length} {pedidosConOrdenDelDia.length === 1 ? 'pedido' : 'pedidos'}
+            </span>
+          </div>
         </div>
 
         <div className="overflow-x-auto">
