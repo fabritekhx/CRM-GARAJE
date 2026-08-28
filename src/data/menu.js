@@ -399,6 +399,16 @@ export const MENU = [
     sabores: [],
     tipoVariante: null,
   },
+  {
+    id: 'c-cerveza-1lt',
+    nombre: 'Cerveza 1 L',
+    categoria: 'cervezas',
+    dia: 'todos',
+    precioBase: 3.00,
+    descripcion: 'Cerveza de 1 Litro (1 L) helada',
+    sabores: [],
+    tipoVariante: null,
+  },
 
   // ==========================================
   // PORCIONES EXTRAS (Todos los días)

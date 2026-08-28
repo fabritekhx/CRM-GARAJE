@@ -45,6 +45,7 @@ export const COSTOS_PREDETERMINADOS = {
 
   // Cervezas
   'c-pilsener-750': 1.35,      // Venta $2.00 -> Ganancia $0.65 (32.5%)
+  'c-cerveza-1lt': 2.25,       // Venta $3.00 -> Ganancia $0.75 (25.0%)
 
   // Porciones Extras
   'p-patacones': 0.35,         // Venta $1.00 -> Ganancia $0.65 (65.0%)

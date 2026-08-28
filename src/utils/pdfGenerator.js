@@ -14,7 +14,7 @@ const CATEGORIAS_DEFINICION = [
   { id: 'sabados', orden: 2, nombre: 'Platos de Sábado (Fritada y Caldos)' },
   { id: 'domingos', orden: 3, nombre: 'Platos de Domingo (Encebollados y Mariscos)' },
   { id: 'porciones', orden: 4, nombre: 'Porciones Extras (Patacones, Yuca, Arroz, Curtido)' },
-  { id: 'cervezas', orden: 5, nombre: 'Cervezas (Pilsener 750ml)' },
+  { id: 'cervezas', orden: 5, nombre: 'Cervezas (Pilsener 750ml, 1 L)' },
   { id: 'gaseosas', orden: 6, nombre: 'Gaseosas y Bebidas (Colas, Fuisti, Agua)' },
   { id: 'jugos', orden: 7, nombre: 'Jugos Naturales (Jarras y Vasos)' },
   { id: 'otros', orden: 8, nombre: 'Otros Productos / Varios' },
