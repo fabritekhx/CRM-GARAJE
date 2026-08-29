@@ -16,10 +16,17 @@ import {
   Eye,
   X,
   Sparkles,
-  Layers
+  Layers,
+  Trash2
 } from 'lucide-react';
 import { usePedidos } from '../context/PedidoContext';
-import { formatearDinero, formatearFecha, formatearFechaCorta, formatearFechaConDiaSemana } from '../utils/helpers';
+import { 
+  formatearDinero, 
+  formatearFecha, 
+  formatearFechaCorta, 
+  formatearFechaConDiaSemana,
+  obtenerFechaLocal 
+} from '../utils/helpers';
 import FirebaseModal from '../components/FirebaseModal';
 import ReportePDFModal from '../components/ReportePDFModal';
 
@@ -29,24 +36,25 @@ export default function Cierres() {
     cierresHistorial, 
     fechaActualApp,
     realizarCierreCaja, 
+    eliminarCierreHistorial,
     mostrarNotificacion,
     costosMap
   } = usePedidos();
 
   // Fecha seleccionada para el nuevo cierre (por defecto hoy en base a fechaActualApp)
-  const [fechaCierre, setFechaCierre] = useState(fechaActualApp || new Date().toISOString().split('T')[0]);
+  const [fechaCierre, setFechaCierre] = useState(() => fechaActualApp || obtenerFechaLocal());
   const [cierreSeleccionadoDetalle, setCierreSeleccionadoDetalle] = useState(null);
   const [procesando, setProcesando] = useState(false);
   const [isPDFModalOpen, setIsPDFModalOpen] = useState(false);
 
   // Sincronizar fechaCierre cuando cambie de día en vivo si el usuario está viendo "hoy"
-  const esHoy = fechaCierre === (fechaActualApp || new Date().toISOString().split('T')[0]);
+  const esHoy = fechaCierre === (fechaActualApp || obtenerFechaLocal());
 
   // Calcular métricas en vivo para la fecha seleccionada
   const resumenVivo = useMemo(() => {
     const pedidosDelDia = pedidosHistorial.filter((p) => {
       if (!p || p.estado === 'cancelado' || p.estado === 'config' || String(p.id).startsWith('SYS_')) return false;
-      const fechaP = typeof p.fecha === 'string' ? p.fecha.split('T')[0] : '';
+      const fechaP = obtenerFechaLocal(p.fecha);
       return fechaP === fechaCierre && p.estado === 'pagado';
     });
 
@@ -146,10 +154,14 @@ export default function Cierres() {
               onClick={() => {
                 const d = new Date();
                 d.setDate(d.getDate() - 1);
-                setFechaCierre(d.toISOString().split('T')[0]);
+                setFechaCierre(obtenerFechaLocal(d));
               }}
               className={`px-2.5 py-1.5 rounded-lg font-bold transition-colors ${
-                fechaCierre === new Date(Date.now() - 86400000).toISOString().split('T')[0]
+                (() => {
+                  const d = new Date();
+                  d.setDate(d.getDate() - 1);
+                  return fechaCierre === obtenerFechaLocal(d);
+                })()
                   ? 'bg-amber-500 text-slate-950 shadow-sm'
                   : 'text-slate-400 hover:text-white'
               }`}
@@ -397,14 +409,28 @@ export default function Cierres() {
                       </td>
 
                       <td className="py-3.5 px-4 text-center">
-                        <button
-                          type="button"
-                          onClick={() => setCierreSeleccionadoDetalle(cierre)}
-                          className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-400 text-xs font-bold border border-slate-700 transition-colors inline-flex items-center gap-1.5"
-                        >
-                          <Eye className="w-3.5 h-3.5" />
-                          <span>Ver Detalle</span>
-                        </button>
+                        <div className="flex items-center justify-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setCierreSeleccionadoDetalle(cierre)}
+                            className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-400 text-xs font-bold border border-slate-700 transition-colors inline-flex items-center gap-1.5"
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                            <span>Ver Detalle</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (window.confirm(`¿Deseas eliminar el registro de cierre de ${cierre.id || cierre.fecha}? Esto permitirá recalcularlo libremente.`)) {
+                                eliminarCierreHistorial(cierre.id);
+                              }
+                            }}
+                            title="Eliminar este cierre"
+                            className="p-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 transition-colors"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </td>
 
                     </tr>

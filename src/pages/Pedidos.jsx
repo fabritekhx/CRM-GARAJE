@@ -32,7 +32,8 @@ import {
   formatearHora,
   formatearDiaLegible, 
   exportarAJSON, 
-  exportarACSV 
+  exportarACSV,
+  obtenerFechaLocal 
 } from '../utils/helpers';
 import TicketModal from '../components/TicketModal';
 import DatabaseModal from '../components/DatabaseModal';
@@ -40,6 +41,7 @@ import DatabaseModal from '../components/DatabaseModal';
 export default function Pedidos() {
   const { 
     pedidosHistorial, 
+    fechaActualApp,
     setTicketPedido, 
     setIsTicketModalOpen, 
     eliminarPedidoHistorial,
@@ -52,18 +54,18 @@ export default function Pedidos() {
   // Modos de filtrado por fecha: 'dia' (por defecto) | 'rango' | 'todos'
   const [modoFecha, setModoFecha] = useState('dia');
   
-  // Fecha seleccionada para el modo 'dia' (por defecto la fecha de hoy)
+  // Fecha seleccionada para el modo 'dia' (por defecto la fecha de hoy local)
   const [fechaSeleccionada, setFechaSeleccionada] = useState(() => {
-    return new Date().toISOString().split('T')[0];
+    return fechaActualApp || obtenerFechaLocal();
   });
 
   // Rango de fechas para el modo 'rango'
   const [fechaInicio, setFechaInicio] = useState(() => {
     const d = new Date();
     d.setDate(d.getDate() - 7);
-    return d.toISOString().split('T')[0];
+    return obtenerFechaLocal(d);
   });
-  const [fechaFin, setFechaFin] = useState(() => new Date().toISOString().split('T')[0]);
+  const [fechaFin, setFechaFin] = useState(() => fechaActualApp || obtenerFechaLocal());
 
   // Dirección de ordenamiento persistente: 'asc' (Primero al Último) | 'desc' (Último al Primero)
   const [ordenDireccion, setOrdenDireccion] = useState(() => {
@@ -88,24 +90,21 @@ export default function Pedidos() {
 
   // Navegar de día (día anterior / día siguiente)
   const cambiarDia = (offset) => {
-    const [y, m, d] = (fechaSeleccionada || new Date().toISOString().split('T')[0]).split('-').map(Number);
+    const [y, m, d] = (fechaSeleccionada || obtenerFechaLocal()).split('-').map(Number);
     const date = new Date(y, m - 1, d);
     date.setDate(date.getDate() + offset);
-    const nuevoYear = date.getFullYear();
-    const nuevoMes = String(date.getMonth() + 1).padStart(2, '0');
-    const nuevoDia = String(date.getDate()).padStart(2, '0');
-    setFechaSeleccionada(`${nuevoYear}-${nuevoMes}-${nuevoDia}`);
+    setFechaSeleccionada(obtenerFechaLocal(date));
   };
 
   const irAHoy = () => {
-    setFechaSeleccionada(new Date().toISOString().split('T')[0]);
+    setFechaSeleccionada(fechaActualApp || obtenerFechaLocal());
     setModoFecha('dia');
   };
 
   const irAAyer = () => {
     const d = new Date();
     d.setDate(d.getDate() - 1);
-    setFechaSeleccionada(d.toISOString().split('T')[0]);
+    setFechaSeleccionada(obtenerFechaLocal(d));
     setModoFecha('dia');
   };
 
@@ -114,8 +113,8 @@ export default function Pedidos() {
     return pedidosHistorial.filter((p) => {
       if (!p || p.estado === 'cancelado' || p.estado === 'config' || String(p.id).startsWith('SYS_')) return false;
 
-      // 1. Filtro por Fecha
-      const fechaP = typeof p.fecha === 'string' ? p.fecha.split('T')[0] : '';
+      // 1. Filtro por Fecha Local
+      const fechaP = obtenerFechaLocal(p.fecha);
       let matchFecha = true;
 
       if (modoFecha === 'dia') {

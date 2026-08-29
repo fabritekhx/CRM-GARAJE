@@ -5,6 +5,51 @@ import { format, parseISO, isValid } from 'date-fns';
 import { es } from 'date-fns/locale';
 
 /**
+ * Extrae la fecha en formato YYYY-MM-DD en la zona horaria local del cliente/navegador.
+ * Evita desfaces de UTC (que a partir de las 19:00 en Ecuador / GMT-5 cambiaba el día a mañana).
+ */
+export const obtenerFechaLocal = (fecha = new Date()) => {
+  if (!fecha) return '';
+  let d;
+  if (fecha instanceof Date) {
+    d = fecha;
+  } else if (typeof fecha === 'string') {
+    if (/^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
+      return fecha;
+    }
+    d = new Date(fecha);
+  } else if (fecha?.toDate && typeof fecha.toDate === 'function') {
+    d = fecha.toDate();
+  } else if (fecha?.seconds) {
+    d = new Date(fecha.seconds * 1000);
+  } else {
+    d = new Date(fecha);
+  }
+
+  if (isNaN(d.getTime())) return '';
+  const anio = d.getFullYear();
+  const mes = String(d.getMonth() + 1).padStart(2, '0');
+  const dia = String(d.getDate()).padStart(2, '0');
+  return `${anio}-${mes}-${dia}`;
+};
+
+/**
+ * Obtiene el ID del día de atención (viernes, sabado, domingo) según la fecha local
+ */
+export const obtenerDiaSemanaId = (fecha = new Date()) => {
+  let d = fecha instanceof Date ? fecha : new Date(fecha);
+  if (typeof fecha === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
+    const [y, m, dia] = fecha.split('-').map(Number);
+    d = new Date(y, m - 1, dia, 12, 0, 0);
+  }
+  const diaNum = d.getDay(); // 0 = Domingo, 5 = Viernes, 6 = Sábado
+  if (diaNum === 5) return 'viernes';
+  if (diaNum === 6) return 'sabado';
+  if (diaNum === 0) return 'domingo';
+  return 'viernes';
+};
+
+/**
  * Formatea un número como monto en dólares ($0.00)
  */
 export const formatearDinero = (monto) => {
@@ -709,13 +754,13 @@ export const fusionarMesasInteligente = (locales = [], remotas = []) => {
  * Reutiliza automáticamente el consecutivo si la última orden se canceló o eliminó.
  */
 export const calcularUltimoNumeroOrdenDelDia = (fechaStr, listaPedidos = [], listaMesas = []) => {
-  const hoyStr = fechaStr || new Date().toISOString().split('T')[0];
+  const hoyStr = fechaStr ? obtenerFechaLocal(fechaStr) : obtenerFechaLocal();
 
   // 1. Números de pedidos ya cobrados hoy en el historial
   const ordenesHistorialHoy = (listaPedidos || [])
     .filter((p) => {
-      if (!p || p.estado === 'cancelado') return false;
-      const f = typeof p.fecha === 'string' ? p.fecha.split('T')[0] : '';
+      if (!p || p.estado === 'cancelado' || p.estado === 'config' || String(p.id).startsWith('SYS_')) return false;
+      const f = obtenerFechaLocal(p.fecha);
       return f === hoyStr;
     })
     .map((p) => Number(p.numeroOrden))
@@ -725,7 +770,7 @@ export const calcularUltimoNumeroOrdenDelDia = (fechaStr, listaPedidos = [], lis
   const ordenesMesasActivasHoy = (listaMesas || [])
     .filter((m) => {
       if (!m || !m.pedidoActual || !m.pedidoActual.numeroOrden) return false;
-      const f = typeof m.pedidoActual.fecha === 'string' ? m.pedidoActual.fecha.split('T')[0] : '';
+      const f = m.pedidoActual.fecha ? obtenerFechaLocal(m.pedidoActual.fecha) : '';
       return f === hoyStr || !f;
     })
     .map((m) => Number(m.pedidoActual.numeroOrden))

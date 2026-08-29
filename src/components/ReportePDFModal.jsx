@@ -14,7 +14,7 @@ import {
   Layers,
   Sparkles
 } from 'lucide-react';
-import { formatearDinero, formatearFecha, formatearDiaLegible } from '../utils/helpers';
+import { formatearDinero, formatearFecha, formatearDiaLegible, obtenerFechaLocal } from '../utils/helpers';
 import { calcularMetricasReporte, descargarReportePDF, generarTextoReporteWhatsApp } from '../utils/pdfGenerator';
 import { obtenerCostosProductos } from '../data/costos';
 
@@ -40,7 +40,7 @@ export default function ReportePDFModal({
   const handleDescargar = () => {
     setDescargando(true);
     try {
-      const nombreLimpio = `el_garaje_reporte_${fechaReporte || new Date().toISOString().split('T')[0]}.pdf`;
+      const nombreLimpio = `el_garaje_reporte_${fechaReporte || obtenerFechaLocal()}.pdf`;
       descargarReportePDF({
         pedidos,
         titulo: 'Reporte Detallado de Liquidación y Ganancias',

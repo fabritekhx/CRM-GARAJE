@@ -26,7 +26,8 @@ import {
   formatearDinero, 
   formatearDiaLegible,
   exportarACSV, 
-  exportarAJSON 
+  exportarAJSON,
+  obtenerFechaLocal 
 } from '../utils/helpers';
 import { 
   GraficoBarrasVentas, 
@@ -38,14 +39,14 @@ import FirebaseModal from '../components/FirebaseModal';
 import ReportePDFModal from '../components/ReportePDFModal';
 
 export default function Analisis() {
-  const { pedidosHistorial, mostrarNotificacion } = usePedidos();
+  const { pedidosHistorial, fechaActualApp, mostrarNotificacion } = usePedidos();
 
   // Modos de análisis: 'dia' (un día exacto) | 'rango' (período de días) | 'todos' (historial total)
   const [modoAnalisis, setModoAnalisis] = useState('dia');
 
-  // Fecha seleccionada para análisis de un solo día (por defecto Hoy)
+  // Fecha seleccionada para análisis de un solo día (por defecto Hoy local)
   const [fechaSeleccionada, setFechaSeleccionada] = useState(() => {
-    return new Date().toISOString().split('T')[0];
+    return fechaActualApp || obtenerFechaLocal();
   });
 
   // Opciones predefinidas de rango o personalizado
@@ -53,9 +54,9 @@ export default function Analisis() {
   const [fechaInicio, setFechaInicio] = useState(() => {
     const d = new Date();
     d.setDate(d.getDate() - 7);
-    return d.toISOString().split('T')[0];
+    return obtenerFechaLocal(d);
   });
-  const [fechaFin, setFechaFin] = useState(() => new Date().toISOString().split('T')[0]);
+  const [fechaFin, setFechaFin] = useState(() => fechaActualApp || obtenerFechaLocal());
 
   // Filtro de método de pago
   const [filtroMetodo, setFiltroMetodo] = useState('todos');
@@ -63,44 +64,41 @@ export default function Analisis() {
 
   // Navegar entre días
   const cambiarDia = (offset) => {
-    const [y, m, d] = (fechaSeleccionada || new Date().toISOString().split('T')[0]).split('-').map(Number);
+    const [y, m, d] = (fechaSeleccionada || obtenerFechaLocal()).split('-').map(Number);
     const date = new Date(y, m - 1, d);
     date.setDate(date.getDate() + offset);
-    const nuevoYear = date.getFullYear();
-    const nuevoMes = String(date.getMonth() + 1).padStart(2, '0');
-    const nuevoDia = String(date.getDate()).padStart(2, '0');
-    setFechaSeleccionada(`${nuevoYear}-${nuevoMes}-${nuevoDia}`);
+    setFechaSeleccionada(obtenerFechaLocal(date));
   };
 
   const irAHoy = () => {
-    setFechaSeleccionada(new Date().toISOString().split('T')[0]);
+    setFechaSeleccionada(fechaActualApp || obtenerFechaLocal());
     setModoAnalisis('dia');
   };
 
   const irAAyer = () => {
     const d = new Date();
     d.setDate(d.getDate() - 1);
-    setFechaSeleccionada(d.toISOString().split('T')[0]);
+    setFechaSeleccionada(obtenerFechaLocal(d));
     setModoAnalisis('dia');
   };
 
   const seleccionarRangoPredefinido = (tipo) => {
     setTipoRango(tipo);
     const hoy = new Date();
-    const hoyStr = hoy.toISOString().split('T')[0];
+    const hoyStr = obtenerFechaLocal(hoy);
     setFechaFin(hoyStr);
 
     if (tipo === '7dias') {
       const d = new Date();
       d.setDate(d.getDate() - 7);
-      setFechaInicio(d.toISOString().split('T')[0]);
+      setFechaInicio(obtenerFechaLocal(d));
     } else if (tipo === '30dias') {
       const d = new Date();
       d.setDate(d.getDate() - 30);
-      setFechaInicio(d.toISOString().split('T')[0]);
+      setFechaInicio(obtenerFechaLocal(d));
     } else if (tipo === 'mesActual') {
       const primerDiaMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
-      setFechaInicio(primerDiaMes.toISOString().split('T')[0]);
+      setFechaInicio(obtenerFechaLocal(primerDiaMes));
     }
   };
 
@@ -114,8 +112,8 @@ export default function Analisis() {
         return false;
       }
 
-      // Filtro por Fecha
-      const fechaP = typeof p.fecha === 'string' ? p.fecha.split('T')[0] : '';
+      // Filtro por Fecha Local
+      const fechaP = obtenerFechaLocal(p.fecha);
 
       if (modoAnalisis === 'dia') {
         return fechaP === fechaSeleccionada;

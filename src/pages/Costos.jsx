@@ -37,7 +37,12 @@ import {
   COSTOS_PREDETERMINADOS, 
   obtenerCostoUnitario 
 } from '../data/costos';
-import { formatearDinero, formatearFecha, formatearDiaLegible } from '../utils/helpers';
+import { 
+  formatearDinero, 
+  formatearFecha, 
+  formatearDiaLegible, 
+  obtenerFechaLocal 
+} from '../utils/helpers';
 import ReportePDFModal from '../components/ReportePDFModal';
 
 export default function Costos() {
@@ -55,13 +60,13 @@ export default function Costos() {
 
   // Fecha seleccionada para ver rentabilidad del día
   const [modoFecha, setModoFecha] = useState('dia'); // 'dia' | 'rango' | 'todos'
-  const [fechaSeleccionada, setFechaSeleccionada] = useState(fechaActualApp || new Date().toISOString().split('T')[0]);
+  const [fechaSeleccionada, setFechaSeleccionada] = useState(() => fechaActualApp || obtenerFechaLocal());
   const [fechaInicio, setFechaInicio] = useState(() => {
     const d = new Date();
     d.setDate(d.getDate() - 7);
-    return d.toISOString().split('T')[0];
+    return obtenerFechaLocal(d);
   });
-  const [fechaFin, setFechaFin] = useState(() => new Date().toISOString().split('T')[0]);
+  const [fechaFin, setFechaFin] = useState(() => fechaActualApp || obtenerFechaLocal());
 
   // Filtros de búsqueda y categoría
   const [busqueda, setBusqueda] = useState('');
@@ -82,24 +87,21 @@ export default function Costos() {
 
   // Navegar entre días
   const cambiarDia = (delta) => {
-    const [y, m, d] = (fechaSeleccionada || new Date().toISOString().split('T')[0]).split('-').map(Number);
+    const [y, m, d] = (fechaSeleccionada || obtenerFechaLocal()).split('-').map(Number);
     const date = new Date(y, m - 1, d);
     date.setDate(date.getDate() + delta);
-    const nuevoYear = date.getFullYear();
-    const nuevoMes = String(date.getMonth() + 1).padStart(2, '0');
-    const nuevoDia = String(date.getDate()).padStart(2, '0');
-    setFechaSeleccionada(`${nuevoYear}-${nuevoMes}-${nuevoDia}`);
+    setFechaSeleccionada(obtenerFechaLocal(date));
   };
 
   const irAHoy = () => {
-    setFechaSeleccionada(fechaActualApp || new Date().toISOString().split('T')[0]);
+    setFechaSeleccionada(fechaActualApp || obtenerFechaLocal());
     setModoFecha('dia');
   };
 
   const irAAyer = () => {
     const d = new Date();
     d.setDate(d.getDate() - 1);
-    setFechaSeleccionada(d.toISOString().split('T')[0]);
+    setFechaSeleccionada(obtenerFechaLocal(d));
     setModoFecha('dia');
   };
 
@@ -107,7 +109,7 @@ export default function Costos() {
   const pedidosFiltrados = useMemo(() => {
     return pedidosHistorial.filter((p) => {
       if (!p || p.estado === 'cancelado' || p.estado === 'config' || String(p.id).startsWith('SYS_')) return false;
-      const fechaP = typeof p.fecha === 'string' ? p.fecha.split('T')[0] : '';
+      const fechaP = obtenerFechaLocal(p.fecha);
       
       if (modoFecha === 'dia') {
         return fechaP === fechaSeleccionada;

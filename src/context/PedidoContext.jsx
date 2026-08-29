@@ -18,6 +18,7 @@ import {
   guardarPedidoEnSupabase, 
   eliminarPedidoEnSupabase, 
   guardarCierreEnSupabase, 
+  eliminarCierreEnSupabase,
   cargarPedidosDesdeSupabase, 
   cargarCierresDesdeSupabase,
   guardarMesasActivasEnSupabase,
@@ -30,7 +31,7 @@ import {
   SUPABASE_PROJECT_ID, 
   SUPABASE_URL
 } from '../supabase/client';
-import { fusionarMesasInteligente, calcularUltimoNumeroOrdenDelDia } from '../utils/helpers';
+import { fusionarMesasInteligente, calcularUltimoNumeroOrdenDelDia, obtenerFechaLocal, obtenerDiaSemanaId } from '../utils/helpers';
 import { 
   obtenerPreciosProductos, 
   guardarPreciosProductos, 
@@ -129,7 +130,7 @@ export const PedidoProvider = ({ children }) => {
   // Consecutivo de orden diario (inicia en 0 al iniciar el día para que la primera orden sea la #1)
   const [ultimoNumeroOrden, setUltimoNumeroOrden] = useState(() => {
     try {
-      const hoyStr = new Date().toISOString().split('T')[0];
+      const hoyStr = obtenerFechaLocal();
       const guardadosPedidos = localStorage.getItem(STORAGE_PEDIDOS);
       const parsedPedidos = guardadosPedidos ? JSON.parse(guardadosPedidos) : [];
       const guardadasMesas = localStorage.getItem(STORAGE_MESAS);
@@ -146,11 +147,7 @@ export const PedidoProvider = ({ children }) => {
     try {
       const guardado = localStorage.getItem(STORAGE_DIA);
       if (guardado) return guardado;
-      const diaNum = new Date().getDay(); // 0 = Domingo, 5 = Viernes, 6 = Sábado
-      if (diaNum === 5) return 'viernes';
-      if (diaNum === 6) return 'sabado';
-      if (diaNum === 0) return 'domingo';
-      return 'viernes';
+      return obtenerDiaSemanaId();
     } catch {
       return 'viernes';
     }
@@ -191,8 +188,8 @@ export const PedidoProvider = ({ children }) => {
   const lastLocalMutationTimestampRef = useRef(0);
   const autoCierreEjecutadoRef = useRef(new Set());
 
-  // Fecha actual observada por la app (se actualiza automáticamente a medianoche 00:00:00)
-  const [fechaActualApp, setFechaActualApp] = useState(() => new Date().toISOString().split('T')[0]);
+  // Fecha actual observada por la app en la zona horaria local del negocio
+  const [fechaActualApp, setFechaActualApp] = useState(() => obtenerFechaLocal());
 
   // Guardar en localStorage automáticamente ante cambios locales
   useEffect(() => {
@@ -315,7 +312,7 @@ export const PedidoProvider = ({ children }) => {
       }
 
       // 4. Recalcular consecutivo de orden de HOY para empezar en 1 y no saltar números
-      const hoyStr = new Date().toISOString().split('T')[0];
+      const hoyStr = obtenerFechaLocal();
       const maxOrdenHoy = calcularUltimoNumeroOrdenDelDia(hoyStr, pedidosActuales, mesasActuales);
       setUltimoNumeroOrden(maxOrdenHoy);
 
@@ -556,61 +553,25 @@ export const PedidoProvider = ({ children }) => {
     };
   }, [sincronizarConSupabase]);
 
-  // Scheduler de Cierre Automático a las 23:59:59 y detección de cambio de día a las 00:00:00
+  // Detección de cambio de día según el reloj local del navegador (a medianoche 00:00:00)
+  // NOTA: NO se fuerza el cierre de caja de forma automática para no interrumpir la atención de los clientes ni los turnos de noche.
   useEffect(() => {
-    const verificarYEjecutarAutoCierre = async () => {
-      const ahora = new Date();
-      const hora = ahora.getHours();
-      const minutos = ahora.getMinutes();
-      const segundos = ahora.getSeconds();
-      const hoyStr = ahora.toISOString().split('T')[0];
-
-      // 1. Detección de cambio de día (00:00:00) para reiniciar la vista activa
+    const verificarCambioDia = () => {
+      const hoyLocal = obtenerFechaLocal();
       setFechaActualApp((fechaAnterior) => {
-        if (fechaAnterior !== hoyStr) {
-          // Si el día anterior no fue cerrado y tenía pedidos, guardarlo en el historial
-          const pedidosDiaAnterior = pedidosHistorial.filter((p) => {
-            const f = typeof p.fecha === 'string' ? p.fecha.split('T')[0] : '';
-            return f === fechaAnterior && p.estado === 'pagado';
-          });
-          const yaCerrado = cierresHistorial.some((c) => c.id === fechaAnterior);
-          if (pedidosDiaAnterior.length > 0 && !yaCerrado && !autoCierreEjecutadoRef.current.has(fechaAnterior)) {
-            autoCierreEjecutadoRef.current.add(fechaAnterior);
-            realizarCierreCaja(fechaAnterior, true);
-          }
-
-          // Reiniciar consecutivo de orden para el nuevo día (empezará en 1)
-          const nuevoMax = calcularUltimoNumeroOrdenDelDia(hoyStr, pedidosHistorial, mesas);
+        if (fechaAnterior !== hoyLocal) {
+          // Actualizar consecutivo de orden para el nuevo día
+          const nuevoMax = calcularUltimoNumeroOrdenDelDia(hoyLocal, pedidosHistorial, mesas);
           setUltimoNumeroOrden(nuevoMax);
-
-          return hoyStr;
+          return hoyLocal;
         }
         return fechaAnterior;
       });
-
-      // 2. Ejecutar cierre automático a las 23:59:59 (entre segundo 50 y 59)
-      if (hora === 23 && minutos === 59 && segundos >= 50) {
-        if (!autoCierreEjecutadoRef.current.has(hoyStr)) {
-          const pedidosHoy = pedidosHistorial.filter((p) => {
-            const f = typeof p.fecha === 'string' ? p.fecha.split('T')[0] : '';
-            return f === hoyStr && p.estado === 'pagado';
-          });
-          const yaCerrado = cierresHistorial.some((c) => c.id === hoyStr);
-          if (pedidosHoy.length > 0 && !yaCerrado) {
-            autoCierreEjecutadoRef.current.add(hoyStr);
-            console.log(`[Auto-Cierre 23:59:59] Guardando cierre automático para ${hoyStr}...`);
-            await realizarCierreCaja(hoyStr, true);
-          }
-        }
-      }
     };
 
-    const intervalId = setInterval(verificarYEjecutarAutoCierre, 10000);
-    // Ejecución inicial al montar
-    verificarYEjecutarAutoCierre();
-
+    const intervalId = setInterval(verificarCambioDia, 30000);
     return () => clearInterval(intervalId);
-  }, [pedidosHistorial, cierresHistorial]);
+  }, [pedidosHistorial, mesas]);
 
   // Guardado manual explícito con confirmación al usuario
   const guardarComandaEnNube = async () => {
@@ -636,7 +597,7 @@ export const PedidoProvider = ({ children }) => {
 
     if (mesa.estado === 'libre' || !mesa.pedidoActual) {
       // Calcular siguiente número de orden dinámico para hoy (empieza en 1 y no salta números)
-      const hoyStr = new Date().toISOString().split('T')[0];
+      const hoyStr = obtenerFechaLocal();
       const ultimoHoy = calcularUltimoNumeroOrdenDelDia(hoyStr, pedidosHistorial, mesas);
       const nuevoNumOrden = ultimoHoy + 1;
 
@@ -1047,7 +1008,7 @@ export const PedidoProvider = ({ children }) => {
         });
 
         if (huboLiberacion) {
-          const hoyStr = new Date().toISOString().split('T')[0];
+          const hoyStr = obtenerFechaLocal();
           const nuevoMax = calcularUltimoNumeroOrdenDelDia(hoyStr, pedidosHistorial, actualizadas);
           setUltimoNumeroOrden(nuevoMax);
         }
@@ -1094,7 +1055,7 @@ export const PedidoProvider = ({ children }) => {
     const idUnico = `dom_${Date.now()}`;
 
     // Calcular consecutivo dinámico de hoy sin saltos
-    const hoyStr = new Date().toISOString().split('T')[0];
+    const hoyStr = obtenerFechaLocal();
     const ultimoHoy = calcularUltimoNumeroOrdenDelDia(hoyStr, pedidosHistorial, mesas);
     const nuevoNumOrden = ultimoHoy + 1;
 
@@ -1141,7 +1102,7 @@ export const PedidoProvider = ({ children }) => {
     lastLocalMutationTimestampRef.current = Date.now();
     setMesas((prev) => {
       const actualizadas = prev.filter((m) => m.id !== idONumero && m.numero !== idONumero);
-      const hoyStr = new Date().toISOString().split('T')[0];
+      const hoyStr = obtenerFechaLocal();
       const nuevoMax = calcularUltimoNumeroOrdenDelDia(hoyStr, pedidosHistorial, actualizadas);
       setUltimoNumeroOrden(nuevoMax);
       return actualizadas;
@@ -1160,7 +1121,7 @@ export const PedidoProvider = ({ children }) => {
     const reset = MESAS_INICIALES.map((m) => ({ ...m, updatedAt: Date.now() }));
     setMesas(reset);
     localStorage.setItem(STORAGE_MESAS, JSON.stringify(reset));
-    const hoyStr = new Date().toISOString().split('T')[0];
+    const hoyStr = obtenerFechaLocal();
     const nuevoMax = calcularUltimoNumeroOrdenDelDia(hoyStr, pedidosHistorial, reset);
     setUltimoNumeroOrden(nuevoMax);
     setIsPedidoModalOpen(false);
@@ -1178,7 +1139,7 @@ export const PedidoProvider = ({ children }) => {
           ? { ...m, estado: 'libre', pedidoActual: null, updatedAt: Date.now() }
           : m
       );
-      const hoyStr = new Date().toISOString().split('T')[0];
+      const hoyStr = obtenerFechaLocal();
       const nuevoMax = calcularUltimoNumeroOrdenDelDia(hoyStr, pedidosHistorial, actualizadas);
       setUltimoNumeroOrden(nuevoMax);
       return actualizadas;
@@ -1292,11 +1253,12 @@ export const PedidoProvider = ({ children }) => {
   };
 
   // Realizar cierre de caja diario
-  const realizarCierreCaja = async (fechaFiltro = new Date().toISOString().split('T')[0], esAutomatico = false) => {
+  const realizarCierreCaja = async (fechaFiltro = obtenerFechaLocal(), esAutomatico = false) => {
     lastLocalMutationTimestampRef.current = Date.now();
-    // Filtrar pedidos de esa fecha
+    // Filtrar pedidos de esa fecha usando la zona horaria local del cliente
     const pedidosDelDia = pedidosHistorial.filter((p) => {
-      const fechaP = typeof p.fecha === 'string' ? p.fecha.split('T')[0] : new Date(p.fecha).toISOString().split('T')[0];
+      if (!p || p.estado === 'cancelado' || p.estado === 'config' || String(p.id).startsWith('SYS_')) return false;
+      const fechaP = obtenerFechaLocal(p.fecha);
       return fechaP === fechaFiltro && p.estado === 'pagado';
     });
 
@@ -1376,11 +1338,32 @@ export const PedidoProvider = ({ children }) => {
     });
 
     if (esAutomatico) {
-      mostrarNotificacion(`⏰ Cierre automático a las 23:59:59 (${fechaFiltro}) guardado en la nube`, 'info');
+      mostrarNotificacion(`⏰ Cierre (${fechaFiltro}) guardado`, 'info');
     } else {
-      mostrarNotificacion(`Cierre de caja para ${fechaFiltro} guardado en Supabase`, 'success');
+      mostrarNotificacion(`Cierre de caja para ${fechaFiltro} guardado con éxito`, 'success');
     }
     return cierre;
+  };
+
+  // Eliminar un cierre de caja del historial
+  const eliminarCierreHistorial = async (cierreId) => {
+    lastLocalMutationTimestampRef.current = Date.now();
+    try {
+      await eliminarCierreEnSupabase(cierreId);
+    } catch (e) {
+      console.warn('Aviso borrando cierre en Supabase:', e);
+    }
+
+    if (db && isFirebaseConfigured()) {
+      try {
+        await deleteDoc(doc(db, 'cierres', cierreId));
+      } catch (e) {
+        console.warn('Aviso borrando cierre en Firestore:', e);
+      }
+    }
+
+    setCierresHistorial((prev) => prev.filter((c) => c.id !== cierreId));
+    mostrarNotificacion(`Cierre ${cierreId} eliminado`, 'info');
   };
 
   // Eliminar un pedido del historial (Supabase + Firestore + Local y recalcular consecutivo)
@@ -1405,7 +1388,7 @@ export const PedidoProvider = ({ children }) => {
     // 3. Eliminar de estado local y recalcular consecutivo
     setPedidosHistorial((prev) => {
       const actualizados = prev.filter((p) => p.id !== pedidoId);
-      const hoyStr = new Date().toISOString().split('T')[0];
+      const hoyStr = obtenerFechaLocal();
       const nuevoMax = calcularUltimoNumeroOrdenDelDia(hoyStr, actualizados, mesas);
       setUltimoNumeroOrden(nuevoMax);
       return actualizados;
@@ -1516,6 +1499,7 @@ export const PedidoProvider = ({ children }) => {
         cancelarPedidoMesa,
         confirmarCobro,
         realizarCierreCaja,
+        eliminarCierreHistorial,
         sincronizarConSupabase,
         eliminarPedidoHistorial,
         reiniciarTodoACero,

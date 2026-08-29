@@ -295,6 +295,26 @@ export const guardarCierreEnSupabase = async (cierre) => {
 };
 
 /**
+ * Elimina un cierre de caja en Supabase
+ */
+export const eliminarCierreEnSupabase = async (cierreId) => {
+  if (!supabase) return { success: false, error: 'Supabase no inicializado' };
+
+  try {
+    const { error } = await supabase
+      .from('cierres')
+      .delete()
+      .eq('id', cierreId);
+
+    if (error) throw error;
+    return { success: true };
+  } catch (err) {
+    console.warn('Supabase: aviso al eliminar cierre en tabla:', err.message || err);
+    return { success: false, error: err.message || err };
+  }
+};
+
+/**
  * Carga todos los pedidos desde Supabase
  */
 export const cargarPedidosDesdeSupabase = async () => {
