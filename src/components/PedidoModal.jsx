@@ -35,6 +35,7 @@ export default function PedidoModal() {
     actualizarNotasItem, 
     actualizarPrecioItem,
     actualizarNotasPedido,
+    vaciarComandaMesa,
     cancelarPedidoMesa,
     cerrarModalPedido,
     mostrarNotificacion
@@ -53,6 +54,12 @@ export default function PedidoModal() {
   const productos = pedidoActual?.productos || [];
   const cantidadTotal = productos.reduce((acc, p) => acc + (p.cantidad || 0), 0);
   const total = pedidoActual?.total || 0;
+  const esDomicilio = mesaActual?.tipo === 'domicilio' || String(mesaSeleccionada).toLowerCase().includes('dom');
+  const numMesa = Number(mesaActual?.numero);
+  const esMesaFijaSalon = !esDomicilio && !isNaN(numMesa) && numMesa >= 1 && numMesa <= 7;
+  const tituloMesa = esDomicilio 
+    ? (mesaActual?.nombre || 'A Domicilio') 
+    : (mesaActual?.nombre || `Mesa ${mesaSeleccionada}`);
 
   const handleProcederCobro = () => {
     if (productos.length === 0) {
@@ -85,13 +92,17 @@ export default function PedidoModal() {
         <div className="px-4 sm:px-6 py-3.5 bg-slate-900 border-b border-slate-800 flex items-center justify-between gap-4">
           
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-amber-500 text-slate-950 font-black text-lg flex items-center justify-center shadow-md shadow-amber-500/20">
-              {mesaSeleccionada === 'Domicilio' ? <Bike className="w-5 h-5" /> : `M${mesaSeleccionada}`}
+            <div className={`w-10 h-10 rounded-xl font-black text-lg flex items-center justify-center shadow-md ${
+              esDomicilio 
+                ? 'bg-cyan-500 text-slate-950 shadow-cyan-500/20' 
+                : 'bg-amber-500 text-slate-950 shadow-amber-500/20'
+            }`}>
+              {esDomicilio ? <Bike className="w-5 h-5" /> : `M${mesaSeleccionada}`}
             </div>
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="font-extrabold text-base sm:text-lg text-white">
-                  {mesaSeleccionada === 'Domicilio' ? 'A Domicilio' : `Mesa ${mesaSeleccionada}`}
+                  {tituloMesa}
                 </h2>
                 <span className="px-2 py-0.5 rounded-full bg-amber-500/20 border border-amber-500/30 text-amber-400 text-xs font-mono font-bold">
                   Orden #{pedidoActual?.numeroOrden || '---'}
@@ -133,18 +144,18 @@ export default function PedidoModal() {
               </button>
             </div>
 
-            {/* Botón Cancelar Orden (visible si hay productos) */}
-            {productos.length > 0 && (
-              <button
-                type="button"
-                onClick={() => setConfirmandoEliminar(true)}
-                className="py-1.5 px-2.5 sm:px-3 rounded-xl border border-rose-500/30 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 hover:text-rose-300 font-bold text-xs flex items-center gap-1.5 transition-colors"
-                title="Cancelar comanda y liberar mesa"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Cancelar Orden</span>
-              </button>
-            )}
+            {/* Botón Cancelar / Eliminar comanda */}
+            <button
+              type="button"
+              onClick={() => setConfirmandoEliminar(true)}
+              className="py-1.5 px-2.5 sm:px-3 rounded-xl border border-rose-500/30 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 hover:text-rose-300 font-bold text-xs flex items-center gap-1.5 transition-colors"
+              title={esMesaFijaSalon ? "Cancelar orden y liberar mesa" : "Eliminar mesa y cancelar orden"}
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">
+                {esMesaFijaSalon ? 'Cancelar Orden' : 'Eliminar Mesa'}
+              </span>
+            </button>
 
             {/* Botón Cerrar Modal */}
             <button
@@ -435,17 +446,32 @@ export default function PedidoModal() {
                 </button>
               </div>
 
-              {/* Botón secundario para Cancelar y Vaciar Comanda */}
-              {productos.length > 0 && (
+              {/* Acciones de cancelación y vaciado rápido */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {productos.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => vaciarComandaMesa(mesaSeleccionada)}
+                    className="py-2 px-3 rounded-xl border border-amber-500/20 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 hover:text-amber-300 font-bold text-xs flex items-center justify-center gap-1.5 transition-colors"
+                    title="Vaciar platos para recotizar sin cerrar comanda"
+                  >
+                    <RotateCcw className="w-4 h-4" />
+                    <span>Vaciar Platos</span>
+                  </button>
+                )}
+
                 <button
                   type="button"
                   onClick={() => setConfirmandoEliminar(true)}
-                  className="w-full py-2 px-3 rounded-xl border border-rose-500/20 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 hover:text-rose-300 font-bold text-xs flex items-center justify-center gap-1.5 transition-colors"
+                  className={`py-2 px-3 rounded-xl border border-rose-500/20 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 hover:text-rose-300 font-bold text-xs flex items-center justify-center gap-1.5 transition-colors ${
+                    productos.length === 0 ? 'col-span-full' : ''
+                  }`}
+                  title={esMesaFijaSalon ? "Cancelar orden y volver a salón" : "Eliminar mesa y volver a salón"}
                 >
                   <Trash2 className="w-4 h-4" />
-                  <span>Cancelar y Vaciar Comanda</span>
+                  <span>{esMesaFijaSalon ? 'Cancelar y Liberar' : 'Eliminar Mesa'}</span>
                 </button>
-              )}
+              </div>
 
             </div>
 
@@ -457,22 +483,29 @@ export default function PedidoModal() {
 
       {/* Modal de confirmación para cancelar pedido / vaciar mesa */}
       {confirmandoEliminar && (
-        <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className="w-full max-w-sm bg-slate-900 border border-rose-500/40 rounded-2xl p-5 space-y-4 text-center">
+        <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-150">
+          <div className="w-full max-w-sm bg-slate-900 border border-rose-500/40 rounded-2xl p-5 space-y-4 text-center shadow-2xl">
             <div className="w-12 h-12 rounded-full bg-rose-500/20 text-rose-400 mx-auto flex items-center justify-center">
               <AlertTriangle className="w-6 h-6" />
             </div>
             <div>
-              <h4 className="font-bold text-white text-base">¿Cancelar orden de Mesa {mesaSeleccionada}?</h4>
-              <p className="text-xs text-slate-400 mt-1">
-                Se cancelará el pedido activo, se vaciarán los platos y la mesa volverá a estar Libre. Las órdenes siguientes se reordenarán automáticamente sin huecos.
+              <h4 className="font-bold text-white text-base">
+                ¿{esMesaFijaSalon ? 'Cancelar orden de' : 'Eliminar'} {tituloMesa}?
+              </h4>
+              <p className="text-xs text-slate-300 mt-2 leading-relaxed">
+                {esMesaFijaSalon
+                  ? 'Se cancelará el pedido activo, se vaciarán los platos y la mesa quedará Libre en el salón.'
+                  : 'Se cancelará el pedido activo y esta mesa se retirará por completo del salón.'}
+              </p>
+              <p className="text-[11px] text-amber-400/90 mt-1 font-medium">
+                Las demás órdenes se resecuenciarán automáticamente sin dejar huecos numéricos.
               </p>
             </div>
             <div className="grid grid-cols-2 gap-2 pt-2">
               <button
                 type="button"
                 onClick={() => setConfirmandoEliminar(false)}
-                className="py-2 px-3 rounded-xl bg-slate-800 text-slate-300 text-xs font-semibold hover:bg-slate-700"
+                className="py-2.5 px-3 rounded-xl bg-slate-800 text-slate-300 text-xs font-semibold hover:bg-slate-700 transition-colors"
               >
                 No, mantener
               </button>
@@ -482,9 +515,9 @@ export default function PedidoModal() {
                   cancelarPedidoMesa(mesaSeleccionada);
                   setConfirmandoEliminar(false);
                 }}
-                className="py-2 px-3 rounded-xl bg-rose-600 text-white text-xs font-bold hover:bg-rose-500"
+                className="py-2.5 px-3 rounded-xl bg-rose-600 text-white text-xs font-bold hover:bg-rose-500 shadow-lg shadow-rose-600/30 transition-colors"
               >
-                Sí, cancelar orden
+                Sí, {esMesaFijaSalon ? 'cancelar orden' : 'eliminar mesa'}
               </button>
             </div>
           </div>

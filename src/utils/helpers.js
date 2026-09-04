@@ -672,6 +672,17 @@ export const compartirTicket = async (pedido) => {
 };
 
 /**
+ * Compara de forma tolerante y segura si una mesa corresponde a un número o ID (manejando string vs number).
+ */
+export const esMesaCoincidente = (mesa, idONumero) => {
+  if (!mesa || idONumero === undefined || idONumero === null) return false;
+  const target = String(idONumero).trim();
+  const mesaId = mesa.id !== undefined && mesa.id !== null ? String(mesa.id).trim() : '';
+  const mesaNum = mesa.numero !== undefined && mesa.numero !== null ? String(mesa.numero).trim() : '';
+  return target === mesaId || target === mesaNum;
+};
+
+/**
  * Sanitiza la lista de mesas para asegurar integridad absoluta:
  * 1. Limpia mesas con pedidos ya cobrados en el historial (evita pedidos zombies).
  * 2. Purga pedidos activos de jornadas anteriores que hayan quedado huérfanos.
@@ -728,17 +739,16 @@ export const sanitizarMesasActivas = (mesas = [], pedidosPagados = []) => {
       return m;
     });
 
-  // Normalización estricta de números de orden de mesas activas hoy (evita saltos y huecos como 11 y 13)
+  // Normalización estricta de números de orden de mesas activas hoy (evita saltos y huecos)
+  // La base de correlativo es exactamente la cantidad de pedidos completados hoy en historial
   const ordenesHistorialHoy = (pedidosPagados || [])
     .filter((p) => {
       if (!p || p.estado === 'cancelado' || p.estado === 'config' || String(p.id).startsWith('SYS_')) return false;
       const f = obtenerFechaLocal(p.fecha);
       return f === hoyStr;
-    })
-    .map((p) => Number(p.numeroOrden !== undefined ? p.numeroOrden : p.numero_orden))
-    .filter((n) => !isNaN(n) && n > 0);
+    });
 
-  const maxPagadoHoy = ordenesHistorialHoy.length > 0 ? Math.max(...ordenesHistorialHoy) : 0;
+  const basePagadosHoy = ordenesHistorialHoy.length;
 
   // Filtrar mesas que realmente tienen productos en curso hoy y ordenarlas cronológicamente
   const activasConProductos = limpias
@@ -753,7 +763,7 @@ export const sanitizarMesasActivas = (mesas = [], pedidosPagados = []) => {
   const mapaNumeroOrden = new Map();
   activasConProductos.forEach((m, idx) => {
     const key = String(m.id || m.numero);
-    mapaNumeroOrden.set(key, maxPagadoHoy + idx + 1);
+    mapaNumeroOrden.set(key, basePagadosHoy + idx + 1);
   });
 
   return limpias.map((m) => {
@@ -865,29 +875,23 @@ export const fusionarMesasInteligente = (locales = [], remotas = [], pedidosPaga
 export const calcularUltimoNumeroOrdenDelDia = (fechaStr, listaPedidos = [], listaMesas = []) => {
   const hoyStr = fechaStr ? obtenerFechaLocal(fechaStr) : obtenerFechaLocal();
 
-  // 1. Números de pedidos ya cobrados hoy en el historial
-  const ordenesHistorialHoy = (listaPedidos || [])
+  // 1. Total de pedidos ya cobrados hoy en el historial
+  const totalPagadosHoy = (listaPedidos || [])
     .filter((p) => {
       if (!p || p.estado === 'cancelado' || p.estado === 'config' || String(p.id).startsWith('SYS_')) return false;
       const f = obtenerFechaLocal(p.fecha);
       return f === hoyStr;
-    })
-    .map((p) => Number(p.numeroOrden !== undefined ? p.numeroOrden : p.numero_orden))
-    .filter((n) => !isNaN(n) && n > 0);
+    }).length;
 
-  // 2. Números de pedidos actualmente activos en mesas hoy (que tengan productos cargados)
-  const ordenesMesasActivasHoy = (listaMesas || [])
+  // 2. Total de mesas actualmente activas hoy con productos cargados
+  const totalActivasConProductos = (listaMesas || [])
     .filter((m) => {
-      if (!m || !m.pedidoActual || !m.pedidoActual.numeroOrden) return false;
-      // Una mesa sin productos no consume consecutivo para evitar saltos si solo se abrió por error
+      if (!m || !m.pedidoActual || m.estado !== 'ocupada') return false;
       if (!Array.isArray(m.pedidoActual.productos) || m.pedidoActual.productos.length === 0) return false;
       const f = m.pedidoActual.fecha ? obtenerFechaLocal(m.pedidoActual.fecha) : '';
       return f === hoyStr || !f;
-    })
-    .map((m) => Number(m.pedidoActual.numeroOrden))
-    .filter((n) => !isNaN(n) && n > 0);
+    }).length;
 
-  const todos = [...ordenesHistorialHoy, ...ordenesMesasActivasHoy];
-  return todos.length > 0 ? Math.max(...todos) : 0;
+  return totalPagadosHoy + totalActivasConProductos;
 };
 

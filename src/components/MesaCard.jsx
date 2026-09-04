@@ -48,7 +48,7 @@ function MesaCard({ mesa }) {
 
   return (
     <div
-      onClick={() => abrirMesa(mesa.numero)}
+      onClick={() => abrirMesa(mesa.numero !== undefined ? mesa.numero : mesa.id)}
       className={`group relative overflow-hidden rounded-2xl border transition-all duration-300 cursor-pointer select-none flex flex-col justify-between ${
         estaOcupada
           ? 'bg-gradient-to-b from-slate-900 via-slate-900 to-amber-950/30 border-amber-500/50 shadow-xl shadow-amber-950/20 hover:border-amber-400 hover:shadow-amber-500/10'

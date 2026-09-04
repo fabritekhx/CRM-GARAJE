@@ -31,7 +31,14 @@ import {
   SUPABASE_PROJECT_ID, 
   SUPABASE_URL
 } from '../supabase/client';
-import { fusionarMesasInteligente, calcularUltimoNumeroOrdenDelDia, obtenerFechaLocal, obtenerDiaSemanaId } from '../utils/helpers';
+import { 
+  fusionarMesasInteligente, 
+  calcularUltimoNumeroOrdenDelDia, 
+  obtenerFechaLocal, 
+  obtenerDiaSemanaId,
+  sanitizarMesasActivas,
+  esMesaCoincidente 
+} from '../utils/helpers';
 import { 
   obtenerPreciosProductos, 
   guardarPreciosProductos, 
@@ -638,12 +645,12 @@ export const PedidoProvider = ({ children }) => {
   };
 
   // Obtener el pedido actual de la mesa seleccionada
-  const mesaActual = mesas.find((m) => String(m.numero) === String(mesaSeleccionada) || String(m.id) === String(mesaSeleccionada)) || null;
+  const mesaActual = mesas.find((m) => esMesaCoincidente(m, mesaSeleccionada)) || null;
   const pedidoActual = mesaActual?.pedidoActual || null;
 
   // Calcular total de un pedido
   const calcularTotal = (productos) => {
-    return productos.reduce((sum, item) => {
+    return (productos || []).reduce((sum, item) => {
       const precio = Number(item.precioUnitario) || 0;
       const cant = Number(item.cantidad) || 0;
       return sum + precio * cant;
@@ -659,13 +666,13 @@ export const PedidoProvider = ({ children }) => {
     const precioFinal = precioPersonalizado !== null ? Number(precioPersonalizado) : precioBaseActivo;
     const varianteStr = variante || '';
 
-    setMesas((prev) =>
-      prev.map((m) => {
-        if (m.numero !== mesaSeleccionada) return m;
+    setMesas((prev) => {
+      const actualizadas = prev.map((m) => {
+        if (!esMesaCoincidente(m, mesaSeleccionada)) return m;
 
         const pedido = m.pedidoActual || {
           id: `ped_${Date.now()}_m${m.numero}`,
-          numeroOrden: calcularUltimoNumeroOrdenDelDia(obtenerFechaLocal(), pedidosHistorial, prev) + 1,
+          numeroOrden: calcularUltimoNumeroOrdenDelDia(obtenerFechaLocal(), pedidosHistorialRef.current, prev) + 1,
           mesa: m.numero,
           fecha: new Date().toISOString(),
           productos: [],
@@ -713,8 +720,15 @@ export const PedidoProvider = ({ children }) => {
             total: totalActualizado,
           },
         };
-      })
-    );
+      });
+
+      const hoyStr = obtenerFechaLocal();
+      const sanitizadas = sanitizarMesasActivas(actualizadas, pedidosHistorialRef.current);
+      const nuevoMax = calcularUltimoNumeroOrdenDelDia(hoyStr, pedidosHistorialRef.current, sanitizadas);
+      setUltimoNumeroOrden(nuevoMax);
+      transmitirCambiosMesas(sanitizadas, nuevoMax);
+      return sanitizadas;
+    });
 
     mostrarNotificacion(`Agregado: ${producto.nombre} ${variante ? `(${variante})` : ''} - $${precioFinal.toFixed(2)}`, 'success');
   };
@@ -724,9 +738,9 @@ export const PedidoProvider = ({ children }) => {
     lastLocalMutationTimestampRef.current = Date.now();
     if (!mesaSeleccionada) return;
 
-    setMesas((prev) =>
-      prev.map((m) => {
-        if (m.numero !== mesaSeleccionada || !m.pedidoActual) return m;
+    setMesas((prev) => {
+      const actualizadas = prev.map((m) => {
+        if (!esMesaCoincidente(m, mesaSeleccionada) || !m.pedidoActual) return m;
 
         let nuevosProductos = [...m.pedidoActual.productos];
         const itemActual = nuevosProductos[itemIndex];
@@ -744,18 +758,27 @@ export const PedidoProvider = ({ children }) => {
         }
 
         const totalActualizado = calcularTotal(nuevosProductos);
+        const estaVacio = nuevosProductos.length === 0;
 
         return {
           ...m,
+          estado: estaVacio ? 'libre' : 'ocupada',
           updatedAt: Date.now(),
-          pedidoActual: {
+          pedidoActual: estaVacio ? null : {
             ...m.pedidoActual,
             productos: nuevosProductos,
             total: totalActualizado,
           },
         };
-      })
-    );
+      });
+
+      const hoyStr = obtenerFechaLocal();
+      const sanitizadas = sanitizarMesasActivas(actualizadas, pedidosHistorialRef.current);
+      const nuevoMax = calcularUltimoNumeroOrdenDelDia(hoyStr, pedidosHistorialRef.current, sanitizadas);
+      setUltimoNumeroOrden(nuevoMax);
+      transmitirCambiosMesas(sanitizadas, nuevoMax);
+      return sanitizadas;
+    });
   };
 
   // Eliminar producto del pedido
@@ -763,24 +786,34 @@ export const PedidoProvider = ({ children }) => {
     lastLocalMutationTimestampRef.current = Date.now();
     if (!mesaSeleccionada) return;
 
-    setMesas((prev) =>
-      prev.map((m) => {
-        if (m.numero !== mesaSeleccionada || !m.pedidoActual) return m;
+    setMesas((prev) => {
+      const actualizadas = prev.map((m) => {
+        if (!esMesaCoincidente(m, mesaSeleccionada) || !m.pedidoActual) return m;
 
         const nuevosProductos = m.pedidoActual.productos.filter((_, idx) => idx !== itemIndex);
         const totalActualizado = calcularTotal(nuevosProductos);
+        const estaVacio = nuevosProductos.length === 0;
 
         return {
           ...m,
+          estado: estaVacio ? 'libre' : 'ocupada',
           updatedAt: Date.now(),
-          pedidoActual: {
+          pedidoActual: estaVacio ? null : {
             ...m.pedidoActual,
             productos: nuevosProductos,
             total: totalActualizado,
           },
         };
-      })
-    );
+      });
+
+      const hoyStr = obtenerFechaLocal();
+      const sanitizadas = sanitizarMesasActivas(actualizadas, pedidosHistorialRef.current);
+      const nuevoMax = calcularUltimoNumeroOrdenDelDia(hoyStr, pedidosHistorialRef.current, sanitizadas);
+      setUltimoNumeroOrden(nuevoMax);
+      transmitirCambiosMesas(sanitizadas, nuevoMax);
+      return sanitizadas;
+    });
+    mostrarNotificacion('Producto eliminado del pedido', 'info');
   };
 
   // Actualizar notas de un ítem individual
@@ -788,9 +821,9 @@ export const PedidoProvider = ({ children }) => {
     lastLocalMutationTimestampRef.current = Date.now();
     if (!mesaSeleccionada) return;
 
-    setMesas((prev) =>
-      prev.map((m) => {
-        if (m.numero !== mesaSeleccionada || !m.pedidoActual) return m;
+    setMesas((prev) => {
+      const actualizadas = prev.map((m) => {
+        if (!esMesaCoincidente(m, mesaSeleccionada) || !m.pedidoActual) return m;
 
         const nuevosProductos = [...m.pedidoActual.productos];
         if (nuevosProductos[itemIndex]) {
@@ -808,8 +841,10 @@ export const PedidoProvider = ({ children }) => {
             productos: nuevosProductos,
           },
         };
-      })
-    );
+      });
+      transmitirCambiosMesas(actualizadas, ultimoNumeroOrden);
+      return actualizadas;
+    });
   };
 
   // Actualizar precio de un ítem individual (y opcionalmente fijarlo como precio base permanente)
@@ -819,9 +854,9 @@ export const PedidoProvider = ({ children }) => {
 
     const precioNum = Math.max(0, parseFloat(nuevoPrecio) || 0);
 
-    setMesas((prev) =>
-      prev.map((m) => {
-        if (m.numero !== mesaSeleccionada || !m.pedidoActual) return m;
+    setMesas((prev) => {
+      const actualizadas = prev.map((m) => {
+        if (!esMesaCoincidente(m, mesaSeleccionada) || !m.pedidoActual) return m;
 
         const nuevosProductos = [...m.pedidoActual.productos];
         if (nuevosProductos[itemIndex]) {
@@ -848,8 +883,10 @@ export const PedidoProvider = ({ children }) => {
             total: totalActualizado,
           },
         };
-      })
-    );
+      });
+      transmitirCambiosMesas(actualizadas, ultimoNumeroOrden);
+      return actualizadas;
+    });
   };
 
   // Actualizar precio base de venta de un producto y persistirlo permanentemente
@@ -987,9 +1024,9 @@ export const PedidoProvider = ({ children }) => {
     lastLocalMutationTimestampRef.current = Date.now();
     if (!mesaSeleccionada) return;
 
-    setMesas((prev) =>
-      prev.map((m) => {
-        if (m.numero !== mesaSeleccionada || !m.pedidoActual) return m;
+    setMesas((prev) => {
+      const actualizadas = prev.map((m) => {
+        if (!esMesaCoincidente(m, mesaSeleccionada) || !m.pedidoActual) return m;
         return {
           ...m,
           updatedAt: Date.now(),
@@ -998,39 +1035,48 @@ export const PedidoProvider = ({ children }) => {
             notas,
           },
         };
-      })
-    );
+      });
+      transmitirCambiosMesas(actualizadas, ultimoNumeroOrden);
+      return actualizadas;
+    });
   };
 
   // Cerrar modal de pedido y liberar mesa automáticamente si no tiene ítems (recalculando orden)
   const cerrarModalPedido = () => {
     lastLocalMutationTimestampRef.current = Date.now();
     if (mesaSeleccionada) {
-      let huboLiberacion = false;
+      let huboCambio = false;
       const actualizadas = mesas
         .filter((m) => {
-          // Si es un domicilio temporal sin productos, descartarlo al cerrar
-          if ((m.numero === mesaSeleccionada || m.id === mesaSeleccionada) && m.tipo === 'domicilio') {
-            return m.pedidoActual?.productos && m.pedidoActual.productos.length > 0;
+          if (esMesaCoincidente(m, mesaSeleccionada)) {
+            const num = Number(m.numero);
+            const esMesaFijaSalon = m.tipo === 'mesa' && !isNaN(num) && num >= 1 && num <= 7;
+            const tieneProductos = m.pedidoActual?.productos && m.pedidoActual.productos.length > 0;
+            // Si es mesa agregada o domicilio temporal y no tiene productos cargados, removerlo al cerrar
+            if (!esMesaFijaSalon && !tieneProductos) {
+              huboCambio = true;
+              return false;
+            }
           }
           return true;
         })
         .map((m) => {
-          if (m.numero === mesaSeleccionada || m.id === mesaSeleccionada) {
+          if (esMesaCoincidente(m, mesaSeleccionada)) {
             if (!m.pedidoActual?.productos || m.pedidoActual.productos.length === 0) {
-              huboLiberacion = true;
+              huboCambio = true;
               return { ...m, estado: 'libre', pedidoActual: null, updatedAt: Date.now() };
             }
           }
           return m;
         });
 
-      if (huboLiberacion) {
+      if (huboCambio) {
         const hoyStr = obtenerFechaLocal();
         const sanitizadas = sanitizarMesasActivas(actualizadas, pedidosHistorial);
         const nuevoMax = calcularUltimoNumeroOrdenDelDia(hoyStr, pedidosHistorial, sanitizadas);
         setMesas(sanitizadas);
         setUltimoNumeroOrden(nuevoMax);
+        localStorage.setItem(STORAGE_MESAS, JSON.stringify(sanitizadas));
         guardarMesasActivasEnSupabase(sanitizadas, nuevoMax);
         transmitirCambiosMesas(sanitizadas, nuevoMax);
       }
@@ -1060,7 +1106,11 @@ export const PedidoProvider = ({ children }) => {
       updatedAt: Date.now(),
     };
 
-    setMesas((prev) => [...prev, nuevaMesa]);
+    const nuevasMesas = [...mesas, nuevaMesa];
+    setMesas(nuevasMesas);
+    localStorage.setItem(STORAGE_MESAS, JSON.stringify(nuevasMesas));
+    guardarMesasActivasEnSupabase(nuevasMesas, ultimoNumeroOrden);
+    transmitirCambiosMesas(nuevasMesas, ultimoNumeroOrden);
     mostrarNotificacion(`${nombre} agregada con éxito`, 'success');
     return nuevaMesa;
   };
@@ -1108,10 +1158,14 @@ export const PedidoProvider = ({ children }) => {
       updatedAt: Date.now(),
     };
 
+    const nuevasMesas = [...mesas, nuevoDomicilio];
     setUltimoNumeroOrden(nuevoNumOrden);
-    setMesas((prev) => [...prev, nuevoDomicilio]);
+    setMesas(nuevasMesas);
     setMesaSeleccionada(identificador);
     setIsPedidoModalOpen(true);
+    localStorage.setItem(STORAGE_MESAS, JSON.stringify(nuevasMesas));
+    guardarMesasActivasEnSupabase(nuevasMesas, nuevoNumOrden);
+    transmitirCambiosMesas(nuevasMesas, nuevoNumOrden);
     mostrarNotificacion(`Pedido ${nombre} creado. Añade los platos del comensal`, 'success');
     return nuevoDomicilio;
   };
@@ -1119,20 +1173,20 @@ export const PedidoProvider = ({ children }) => {
   // Eliminar una mesa o cuadro de domicilio (y recalcular consecutivo si procede)
   const eliminarMesa = (idONumero) => {
     lastLocalMutationTimestampRef.current = Date.now();
-    const strId = String(idONumero);
+    const target = idONumero;
 
-    // Si es una mesa fija de salón (1 a 7), no la borramos del mapa físico del restaurante,
-    // sino que cancelamos y vaciamos su comanda dejándola 'libre' para el siguiente comensal.
-    // Si es un domicilio o mesa extra añadida, la removemos del tablero.
+    // Si es una mesa fija de salón (1 a 7), se conserva en el tablero física del restaurante y se deja libre.
+    // Si es un domicilio o mesa extra añadida (8+ o personalizada), se retira completamente.
     const actualizadas = mesas
       .filter((m) => {
-        const coincide = String(m.id) === strId || String(m.numero) === strId;
+        const coincide = esMesaCoincidente(m, target);
         if (!coincide) return true;
-        const esMesaFijaSalon = m.tipo === 'mesa' && typeof m.numero === 'number' && m.numero >= 1 && m.numero <= 7;
+        const num = Number(m.numero);
+        const esMesaFijaSalon = m.tipo === 'mesa' && !isNaN(num) && num >= 1 && num <= 7;
         return esMesaFijaSalon;
       })
       .map((m) => {
-        const coincide = String(m.id) === strId || String(m.numero) === strId;
+        const coincide = esMesaCoincidente(m, target);
         if (coincide) {
           return { ...m, estado: 'libre', pedidoActual: null, updatedAt: Date.now() };
         }
@@ -1148,12 +1202,39 @@ export const PedidoProvider = ({ children }) => {
     guardarMesasActivasEnSupabase(sanitizadas, nuevoMax);
     transmitirCambiosMesas(sanitizadas, nuevoMax);
 
-    if (String(mesaSeleccionada) === strId) {
+    if (esMesaCoincidente({ id: target, numero: target }, mesaSeleccionada)) {
       setIsPedidoModalOpen(false);
       setIsCobroModalOpen(false);
       setMesaSeleccionada(null);
     }
     mostrarNotificacion('Mesa / orden eliminada y resecuenciada correctamente', 'info');
+  };
+
+  // Vaciar comanda actual de la mesa (limpia los platos cotizados para volver a cotizar desde cero)
+  const vaciarComandaMesa = (numeroMesa) => {
+    lastLocalMutationTimestampRef.current = Date.now();
+    const target = numeroMesa !== undefined ? numeroMesa : mesaSeleccionada;
+    if (!target) return;
+
+    const actualizadas = mesas.map((m) => {
+      if (!esMesaCoincidente(m, target)) return m;
+      return {
+        ...m,
+        estado: 'libre',
+        pedidoActual: null,
+        updatedAt: Date.now(),
+      };
+    });
+
+    const hoyStr = obtenerFechaLocal();
+    const sanitizadas = sanitizarMesasActivas(actualizadas, pedidosHistorial);
+    const nuevoMax = calcularUltimoNumeroOrdenDelDia(hoyStr, pedidosHistorial, sanitizadas);
+    setMesas(sanitizadas);
+    setUltimoNumeroOrden(nuevoMax);
+    localStorage.setItem(STORAGE_MESAS, JSON.stringify(sanitizadas));
+    guardarMesasActivasEnSupabase(sanitizadas, nuevoMax);
+    transmitirCambiosMesas(sanitizadas, nuevoMax);
+    mostrarNotificacion('Comanda vaciada. Puedes cotizar nuevamente', 'info');
   };
 
   // Liberar todas las mesas activas de una sola vez
@@ -1177,20 +1258,24 @@ export const PedidoProvider = ({ children }) => {
   // Cancelar/Vaciar pedido de una mesa (recalculando el consecutivo para no saltar números)
   const cancelarPedidoMesa = (numeroMesa) => {
     lastLocalMutationTimestampRef.current = Date.now();
-    const strMesa = String(numeroMesa);
+    const target = numeroMesa !== undefined ? numeroMesa : mesaSeleccionada;
+    if (!target) return;
+
     const actualizadas = mesas
       .filter((m) => {
-        const coincide = String(m.numero) === strMesa || String(m.id) === strMesa;
+        const coincide = esMesaCoincidente(m, target);
         if (!coincide) return true;
-        // Si es un domicilio, se elimina del tablero
-        return m.tipo !== 'domicilio';
+        const num = Number(m.numero);
+        const esMesaFijaSalon = m.tipo === 'mesa' && !isNaN(num) && num >= 1 && num <= 7;
+        return esMesaFijaSalon;
       })
       .map((m) => {
-        const coincide = String(m.numero) === strMesa || String(m.id) === strMesa;
+        const coincide = esMesaCoincidente(m, target);
         return coincide
           ? { ...m, estado: 'libre', pedidoActual: null, updatedAt: Date.now() }
           : m;
       });
+
     const hoyStr = obtenerFechaLocal();
     const sanitizadas = sanitizarMesasActivas(actualizadas, pedidosHistorial);
     const nuevoMax = calcularUltimoNumeroOrdenDelDia(hoyStr, pedidosHistorial, sanitizadas);
@@ -1203,7 +1288,7 @@ export const PedidoProvider = ({ children }) => {
     setIsPedidoModalOpen(false);
     setIsCobroModalOpen(false);
     setMesaSeleccionada(null);
-    mostrarNotificacion(`Comanda de Mesa ${numeroMesa} cancelada. Números de orden resecuenciados`, 'info');
+    mostrarNotificacion('Comanda cancelada y orden resecuenciada sin huecos', 'info');
   };
 
   // Procesar cobro y guardar en Supabase y Firestore
@@ -1452,8 +1537,13 @@ export const PedidoProvider = ({ children }) => {
     setPedidosHistorial((prev) => {
       const actualizados = prev.filter((p) => p.id !== pedidoId);
       const hoyStr = obtenerFechaLocal();
-      const nuevoMax = calcularUltimoNumeroOrdenDelDia(hoyStr, actualizados, mesas);
+      const sanitizadas = sanitizarMesasActivas(mesas, actualizados);
+      const nuevoMax = calcularUltimoNumeroOrdenDelDia(hoyStr, actualizados, sanitizadas);
+      setMesas(sanitizadas);
       setUltimoNumeroOrden(nuevoMax);
+      localStorage.setItem(STORAGE_MESAS, JSON.stringify(sanitizadas));
+      guardarMesasActivasEnSupabase(sanitizadas, nuevoMax);
+      transmitirCambiosMesas(sanitizadas, nuevoMax);
       return actualizados;
     });
     mostrarNotificacion('Pedido anulado y eliminado exitosamente', 'info');
@@ -1558,6 +1648,7 @@ export const PedidoProvider = ({ children }) => {
         agregarMesa,
         agregarDomicilio,
         eliminarMesa,
+        vaciarComandaMesa,
         liberarTodasLasMesas,
         cancelarPedidoMesa,
         confirmarCobro,
