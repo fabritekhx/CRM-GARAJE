@@ -397,15 +397,15 @@ export const PedidoProvider = ({ children }) => {
           if (payload && Array.isArray(payload.mesas)) {
             setMesas((current) => {
               const fusionado = fusionarMesasInteligente(current, payload.mesas, pedidosHistorialRef.current);
+              const hoyStr = obtenerFechaLocal();
+              const nuevoMax = calcularUltimoNumeroOrdenDelDia(hoyStr, pedidosHistorialRef.current, fusionado);
+              setUltimoNumeroOrden(nuevoMax);
               if (JSON.stringify(current) !== JSON.stringify(fusionado)) {
                 isRemoteSyncRef.current = true;
                 return fusionado;
               }
               return current;
             });
-            if (payload.ultimoNumeroOrden) {
-              setUltimoNumeroOrden((prev) => Math.max(prev, payload.ultimoNumeroOrden));
-            }
           }
         });
 
@@ -443,15 +443,15 @@ export const PedidoProvider = ({ children }) => {
           }
           setMesas((current) => {
             const fusionado = fusionarMesasInteligente(current, event.data.mesas, pedidosHistorialRef.current);
+            const hoyStr = obtenerFechaLocal();
+            const nuevoMax = calcularUltimoNumeroOrdenDelDia(hoyStr, pedidosHistorialRef.current, fusionado);
+            setUltimoNumeroOrden(nuevoMax);
             if (JSON.stringify(current) !== JSON.stringify(fusionado)) {
               isRemoteSyncRef.current = true;
               return fusionado;
             }
             return current;
           });
-          if (event.data.ultimoNumeroOrden) {
-            setUltimoNumeroOrden((prev) => Math.max(prev, event.data.ultimoNumeroOrden));
-          }
         }
 
         if (event.data?.tipo === 'SYNC_PRECIOS' && event.data.precios) {
@@ -486,15 +486,15 @@ export const PedidoProvider = ({ children }) => {
         if (res.success && Array.isArray(res.mesas) && res.mesas.length > 0) {
           setMesas((current) => {
             const fusionado = fusionarMesasInteligente(current, res.mesas, pedidosHistorialRef.current);
+            const hoyStr = obtenerFechaLocal();
+            const nuevoMax = calcularUltimoNumeroOrdenDelDia(hoyStr, pedidosHistorialRef.current, fusionado);
+            setUltimoNumeroOrden(nuevoMax);
             if (JSON.stringify(current) !== JSON.stringify(fusionado)) {
               isRemoteSyncRef.current = true;
               return fusionado;
             }
             return current;
           });
-          if (res.ultimoNumeroOrden) {
-            setUltimoNumeroOrden((prev) => Math.max(prev, res.ultimoNumeroOrden));
-          }
         }
       });
     };
@@ -517,15 +517,15 @@ export const PedidoProvider = ({ children }) => {
         if (res.success && Array.isArray(res.mesas) && res.mesas.length > 0) {
           setMesas((current) => {
             const fusionado = fusionarMesasInteligente(current, res.mesas, pedidosHistorialRef.current);
+            const hoyStr = obtenerFechaLocal();
+            const nuevoMax = calcularUltimoNumeroOrdenDelDia(hoyStr, pedidosHistorialRef.current, fusionado);
+            setUltimoNumeroOrden(nuevoMax);
             if (JSON.stringify(current) !== JSON.stringify(fusionado)) {
               isRemoteSyncRef.current = true;
               return fusionado;
             }
             return current;
           });
-          if (res.ultimoNumeroOrden) {
-            setUltimoNumeroOrden((prev) => Math.max(prev, res.ultimoNumeroOrden));
-          }
         }
       } catch {
         // Silencioso
@@ -541,7 +541,11 @@ export const PedidoProvider = ({ children }) => {
             if (current.length !== res.data.length) {
               return res.data;
             }
-            return current;
+            const hayCambio = res.data.some((p, idx) => {
+              const c = current[idx];
+              return !c || c.id !== p.id || c.numeroOrden !== p.numeroOrden || c.total !== p.total || c.estado !== p.estado;
+            });
+            return hayCambio ? res.data : current;
           });
         }
       } catch {
@@ -1001,41 +1005,33 @@ export const PedidoProvider = ({ children }) => {
   const cerrarModalPedido = () => {
     lastLocalMutationTimestampRef.current = Date.now();
     if (mesaSeleccionada) {
-      let mesasActualizadas;
-      let nuevoMax;
-      setMesas((prev) => {
-        let huboLiberacion = false;
-        const actualizadas = prev
-          .filter((m) => {
-            // Si es un domicilio temporal sin productos, descartarlo al cerrar
-            if ((m.numero === mesaSeleccionada || m.id === mesaSeleccionada) && m.tipo === 'domicilio') {
-              return m.pedidoActual?.productos && m.pedidoActual.productos.length > 0;
+      let huboLiberacion = false;
+      const actualizadas = mesas
+        .filter((m) => {
+          // Si es un domicilio temporal sin productos, descartarlo al cerrar
+          if ((m.numero === mesaSeleccionada || m.id === mesaSeleccionada) && m.tipo === 'domicilio') {
+            return m.pedidoActual?.productos && m.pedidoActual.productos.length > 0;
+          }
+          return true;
+        })
+        .map((m) => {
+          if (m.numero === mesaSeleccionada || m.id === mesaSeleccionada) {
+            if (!m.pedidoActual?.productos || m.pedidoActual.productos.length === 0) {
+              huboLiberacion = true;
+              return { ...m, estado: 'libre', pedidoActual: null, updatedAt: Date.now() };
             }
-            return true;
-          })
-          .map((m) => {
-            if (m.numero === mesaSeleccionada || m.id === mesaSeleccionada) {
-              if (!m.pedidoActual?.productos || m.pedidoActual.productos.length === 0) {
-                huboLiberacion = true;
-                return { ...m, estado: 'libre', pedidoActual: null, updatedAt: Date.now() };
-              }
-            }
-            return m;
-          });
+          }
+          return m;
+        });
 
-        if (huboLiberacion) {
-          const hoyStr = obtenerFechaLocal();
-          nuevoMax = calcularUltimoNumeroOrdenDelDia(hoyStr, pedidosHistorial, actualizadas);
-          setUltimoNumeroOrden(nuevoMax);
-          mesasActualizadas = actualizadas;
-        }
-
-        return actualizadas;
-      });
-
-      if (mesasActualizadas) {
-        guardarMesasActivasEnSupabase(mesasActualizadas, nuevoMax);
-        transmitirCambiosMesas(mesasActualizadas, nuevoMax);
+      if (huboLiberacion) {
+        const hoyStr = obtenerFechaLocal();
+        const sanitizadas = sanitizarMesasActivas(actualizadas, pedidosHistorial);
+        const nuevoMax = calcularUltimoNumeroOrdenDelDia(hoyStr, pedidosHistorial, sanitizadas);
+        setMesas(sanitizadas);
+        setUltimoNumeroOrden(nuevoMax);
+        guardarMesasActivasEnSupabase(sanitizadas, nuevoMax);
+        transmitirCambiosMesas(sanitizadas, nuevoMax);
       }
     }
     setIsPedidoModalOpen(false);
@@ -1122,13 +1118,15 @@ export const PedidoProvider = ({ children }) => {
   // Eliminar una mesa o cuadro de domicilio (y recalcular consecutivo si procede)
   const eliminarMesa = (idONumero) => {
     lastLocalMutationTimestampRef.current = Date.now();
-    setMesas((prev) => {
-      const actualizadas = prev.filter((m) => m.id !== idONumero && m.numero !== idONumero);
-      const hoyStr = obtenerFechaLocal();
-      const nuevoMax = calcularUltimoNumeroOrdenDelDia(hoyStr, pedidosHistorial, actualizadas);
-      setUltimoNumeroOrden(nuevoMax);
-      return actualizadas;
-    });
+    const actualizadas = mesas.filter((m) => m.id !== idONumero && m.numero !== idONumero);
+    const hoyStr = obtenerFechaLocal();
+    const sanitizadas = sanitizarMesasActivas(actualizadas, pedidosHistorial);
+    const nuevoMax = calcularUltimoNumeroOrdenDelDia(hoyStr, pedidosHistorial, sanitizadas);
+    setMesas(sanitizadas);
+    setUltimoNumeroOrden(nuevoMax);
+    guardarMesasActivasEnSupabase(sanitizadas, nuevoMax);
+    transmitirCambiosMesas(sanitizadas, nuevoMax);
+
     if (mesaSeleccionada === idONumero) {
       setIsPedidoModalOpen(false);
       setIsCobroModalOpen(false);
@@ -1141,11 +1139,14 @@ export const PedidoProvider = ({ children }) => {
   const liberarTodasLasMesas = () => {
     lastLocalMutationTimestampRef.current = Date.now();
     const reset = MESAS_INICIALES.map((m) => ({ ...m, updatedAt: Date.now() }));
-    setMesas(reset);
-    localStorage.setItem(STORAGE_MESAS, JSON.stringify(reset));
     const hoyStr = obtenerFechaLocal();
     const nuevoMax = calcularUltimoNumeroOrdenDelDia(hoyStr, pedidosHistorial, reset);
+    setMesas(reset);
     setUltimoNumeroOrden(nuevoMax);
+    localStorage.setItem(STORAGE_MESAS, JSON.stringify(reset));
+    guardarMesasActivasEnSupabase(reset, nuevoMax);
+    transmitirCambiosMesas(reset, nuevoMax);
+
     setIsPedidoModalOpen(false);
     setIsCobroModalOpen(false);
     setMesaSeleccionada(null);
@@ -1155,27 +1156,20 @@ export const PedidoProvider = ({ children }) => {
   // Cancelar/Vaciar pedido de una mesa (recalculando el consecutivo para no saltar números)
   const cancelarPedidoMesa = (numeroMesa) => {
     lastLocalMutationTimestampRef.current = Date.now();
-    let mesasActualizadas;
-    let nuevoMax;
-    setMesas((prev) => {
-      const actualizadas = prev
-        .filter((m) => !((m.numero === numeroMesa || m.id === numeroMesa) && m.tipo === 'domicilio'))
-        .map((m) =>
-          (m.numero === numeroMesa || m.id === numeroMesa)
-            ? { ...m, estado: 'libre', pedidoActual: null, updatedAt: Date.now() }
-            : m
-        );
-      const hoyStr = obtenerFechaLocal();
-      nuevoMax = calcularUltimoNumeroOrdenDelDia(hoyStr, pedidosHistorial, actualizadas);
-      setUltimoNumeroOrden(nuevoMax);
-      mesasActualizadas = actualizadas;
-      return actualizadas;
-    });
-
-    if (mesasActualizadas) {
-      guardarMesasActivasEnSupabase(mesasActualizadas, nuevoMax);
-      transmitirCambiosMesas(mesasActualizadas, nuevoMax);
-    }
+    const actualizadas = mesas
+      .filter((m) => !((m.numero === numeroMesa || m.id === numeroMesa) && m.tipo === 'domicilio'))
+      .map((m) =>
+        (m.numero === numeroMesa || m.id === numeroMesa)
+          ? { ...m, estado: 'libre', pedidoActual: null, updatedAt: Date.now() }
+          : m
+      );
+    const hoyStr = obtenerFechaLocal();
+    const sanitizadas = sanitizarMesasActivas(actualizadas, pedidosHistorial);
+    const nuevoMax = calcularUltimoNumeroOrdenDelDia(hoyStr, pedidosHistorial, sanitizadas);
+    setMesas(sanitizadas);
+    setUltimoNumeroOrden(nuevoMax);
+    guardarMesasActivasEnSupabase(sanitizadas, nuevoMax);
+    transmitirCambiosMesas(sanitizadas, nuevoMax);
 
     setIsPedidoModalOpen(false);
     setIsCobroModalOpen(false);
@@ -1247,32 +1241,28 @@ export const PedidoProvider = ({ children }) => {
     setPedidosHistorial((prev) => [pedidoPagado, ...prev]);
 
     // 4. Liberar la mesa o eliminar el cuadro si es a domicilio
-    let mesasActualizadas;
-    setMesas((prev) => {
-      mesasActualizadas = prev
-        .filter((m) => {
-          const esEstaMesa = m.numero === mesaSeleccionada || m.id === mesaSeleccionada;
-          if (esEstaMesa && m.tipo === 'domicilio') {
-            return false;
-          }
-          return true;
-        })
-        .map((m) =>
-          m.numero === mesaSeleccionada || m.id === mesaSeleccionada
-            ? { ...m, estado: 'libre', pedidoActual: null, updatedAt: Date.now() }
-            : m
-        );
-      return mesasActualizadas;
-    });
+    const mesasActualizadas = mesas
+      .filter((m) => {
+        const esEstaMesa = m.numero === mesaSeleccionada || m.id === mesaSeleccionada;
+        if (esEstaMesa && m.tipo === 'domicilio') {
+          return false;
+        }
+        return true;
+      })
+      .map((m) =>
+        m.numero === mesaSeleccionada || m.id === mesaSeleccionada
+          ? { ...m, estado: 'libre', pedidoActual: null, updatedAt: Date.now() }
+          : m
+      );
 
     // Inmediatamente sincronizar en la nube la mesa libre para evitar reanimaciones zombies
-    if (mesasActualizadas) {
-      const hoyStr = obtenerFechaLocal();
-      const nuevoMaxOrden = calcularUltimoNumeroOrdenDelDia(hoyStr, [pedidoPagado, ...pedidosHistorial], mesasActualizadas);
-      setUltimoNumeroOrden(nuevoMaxOrden);
-      guardarMesasActivasEnSupabase(mesasActualizadas, nuevoMaxOrden);
-      transmitirCambiosMesas(mesasActualizadas, nuevoMaxOrden);
-    }
+    const hoyStr = obtenerFechaLocal();
+    const sanitizadas = sanitizarMesasActivas(mesasActualizadas, [pedidoPagado, ...pedidosHistorial]);
+    const nuevoMaxOrden = calcularUltimoNumeroOrdenDelDia(hoyStr, [pedidoPagado, ...pedidosHistorial], sanitizadas);
+    setMesas(sanitizadas);
+    setUltimoNumeroOrden(nuevoMaxOrden);
+    guardarMesasActivasEnSupabase(sanitizadas, nuevoMaxOrden);
+    transmitirCambiosMesas(sanitizadas, nuevoMaxOrden);
 
     // 5. Lanzar confeti de éxito
     try {

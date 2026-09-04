@@ -688,7 +688,7 @@ export const sanitizarMesasActivas = (mesas = [], pedidosPagados = []) => {
       .map((p) => String(p.id))
   );
 
-  return mesas
+  const limpias = mesas
     .filter((m) => {
       if (!m) return false;
       const esDomicilio = m.tipo === 'domicilio';
@@ -727,6 +727,52 @@ export const sanitizarMesasActivas = (mesas = [], pedidosPagados = []) => {
 
       return m;
     });
+
+  // Normalización estricta de números de orden de mesas activas hoy (evita saltos y huecos como 11 y 13)
+  const ordenesHistorialHoy = (pedidosPagados || [])
+    .filter((p) => {
+      if (!p || p.estado === 'cancelado' || p.estado === 'config' || String(p.id).startsWith('SYS_')) return false;
+      const f = obtenerFechaLocal(p.fecha);
+      return f === hoyStr;
+    })
+    .map((p) => Number(p.numeroOrden !== undefined ? p.numeroOrden : p.numero_orden))
+    .filter((n) => !isNaN(n) && n > 0);
+
+  const maxPagadoHoy = ordenesHistorialHoy.length > 0 ? Math.max(...ordenesHistorialHoy) : 0;
+
+  // Filtrar mesas que realmente tienen productos en curso hoy y ordenarlas cronológicamente
+  const activasConProductos = limpias
+    .filter((m) => m && m.estado === 'ocupada' && m.pedidoActual && Array.isArray(m.pedidoActual.productos) && m.pedidoActual.productos.length > 0)
+    .sort((a, b) => {
+      const fechaA = new Date(a.pedidoActual?.fecha || 0).getTime() || (a.updatedAt || 0);
+      const fechaB = new Date(b.pedidoActual?.fecha || 0).getTime() || (b.updatedAt || 0);
+      return fechaA - fechaB;
+    });
+
+  // Mapa de identificador a número correlativo sin saltos
+  const mapaNumeroOrden = new Map();
+  activasConProductos.forEach((m, idx) => {
+    const key = String(m.id || m.numero);
+    mapaNumeroOrden.set(key, maxPagadoHoy + idx + 1);
+  });
+
+  return limpias.map((m) => {
+    if (!m || m.estado !== 'ocupada' || !m.pedidoActual) return m;
+    const key = String(m.id || m.numero);
+    if (mapaNumeroOrden.has(key)) {
+      const numCorregido = mapaNumeroOrden.get(key);
+      if (m.pedidoActual.numeroOrden !== numCorregido) {
+        return {
+          ...m,
+          pedidoActual: {
+            ...m.pedidoActual,
+            numeroOrden: numCorregido,
+          },
+        };
+      }
+    }
+    return m;
+  });
 };
 
 /**
