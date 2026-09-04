@@ -602,7 +602,8 @@ export const PedidoProvider = ({ children }) => {
   // Abrir mesa para ver o crear pedido
   const abrirMesa = (numeroMesa) => {
     lastLocalMutationTimestampRef.current = Date.now();
-    const mesa = mesas.find((m) => m.numero === numeroMesa);
+    const strNum = String(numeroMesa);
+    const mesa = mesas.find((m) => String(m.numero) === strNum || String(m.id) === strNum);
     if (!mesa) return;
 
     if (mesa.estado === 'libre' || !mesa.pedidoActual) {
@@ -624,7 +625,7 @@ export const PedidoProvider = ({ children }) => {
 
       setMesas((prev) =>
         prev.map((m) =>
-          m.numero === numeroMesa
+          (String(m.numero) === strNum || String(m.id) === strNum)
             ? { ...m, estado: 'ocupada', pedidoActual: nuevoPedido, updatedAt: Date.now() }
             : m
         )
@@ -637,7 +638,7 @@ export const PedidoProvider = ({ children }) => {
   };
 
   // Obtener el pedido actual de la mesa seleccionada
-  const mesaActual = mesas.find((m) => m.numero === mesaSeleccionada) || null;
+  const mesaActual = mesas.find((m) => String(m.numero) === String(mesaSeleccionada) || String(m.id) === String(mesaSeleccionada)) || null;
   const pedidoActual = mesaActual?.pedidoActual || null;
 
   // Calcular total de un pedido
@@ -1118,21 +1119,41 @@ export const PedidoProvider = ({ children }) => {
   // Eliminar una mesa o cuadro de domicilio (y recalcular consecutivo si procede)
   const eliminarMesa = (idONumero) => {
     lastLocalMutationTimestampRef.current = Date.now();
-    const actualizadas = mesas.filter((m) => m.id !== idONumero && m.numero !== idONumero);
+    const strId = String(idONumero);
+
+    // Si es una mesa fija de salón (1 a 7), no la borramos del mapa físico del restaurante,
+    // sino que cancelamos y vaciamos su comanda dejándola 'libre' para el siguiente comensal.
+    // Si es un domicilio o mesa extra añadida, la removemos del tablero.
+    const actualizadas = mesas
+      .filter((m) => {
+        const coincide = String(m.id) === strId || String(m.numero) === strId;
+        if (!coincide) return true;
+        const esMesaFijaSalon = m.tipo === 'mesa' && typeof m.numero === 'number' && m.numero >= 1 && m.numero <= 7;
+        return esMesaFijaSalon;
+      })
+      .map((m) => {
+        const coincide = String(m.id) === strId || String(m.numero) === strId;
+        if (coincide) {
+          return { ...m, estado: 'libre', pedidoActual: null, updatedAt: Date.now() };
+        }
+        return m;
+      });
+
     const hoyStr = obtenerFechaLocal();
     const sanitizadas = sanitizarMesasActivas(actualizadas, pedidosHistorial);
     const nuevoMax = calcularUltimoNumeroOrdenDelDia(hoyStr, pedidosHistorial, sanitizadas);
     setMesas(sanitizadas);
     setUltimoNumeroOrden(nuevoMax);
+    localStorage.setItem(STORAGE_MESAS, JSON.stringify(sanitizadas));
     guardarMesasActivasEnSupabase(sanitizadas, nuevoMax);
     transmitirCambiosMesas(sanitizadas, nuevoMax);
 
-    if (mesaSeleccionada === idONumero) {
+    if (String(mesaSeleccionada) === strId) {
       setIsPedidoModalOpen(false);
       setIsCobroModalOpen(false);
       setMesaSeleccionada(null);
     }
-    mostrarNotificacion('Mesa o domicilio eliminado del panel', 'info');
+    mostrarNotificacion('Mesa / orden eliminada y resecuenciada correctamente', 'info');
   };
 
   // Liberar todas las mesas activas de una sola vez
@@ -1156,25 +1177,33 @@ export const PedidoProvider = ({ children }) => {
   // Cancelar/Vaciar pedido de una mesa (recalculando el consecutivo para no saltar números)
   const cancelarPedidoMesa = (numeroMesa) => {
     lastLocalMutationTimestampRef.current = Date.now();
+    const strMesa = String(numeroMesa);
     const actualizadas = mesas
-      .filter((m) => !((m.numero === numeroMesa || m.id === numeroMesa) && m.tipo === 'domicilio'))
-      .map((m) =>
-        (m.numero === numeroMesa || m.id === numeroMesa)
+      .filter((m) => {
+        const coincide = String(m.numero) === strMesa || String(m.id) === strMesa;
+        if (!coincide) return true;
+        // Si es un domicilio, se elimina del tablero
+        return m.tipo !== 'domicilio';
+      })
+      .map((m) => {
+        const coincide = String(m.numero) === strMesa || String(m.id) === strMesa;
+        return coincide
           ? { ...m, estado: 'libre', pedidoActual: null, updatedAt: Date.now() }
-          : m
-      );
+          : m;
+      });
     const hoyStr = obtenerFechaLocal();
     const sanitizadas = sanitizarMesasActivas(actualizadas, pedidosHistorial);
     const nuevoMax = calcularUltimoNumeroOrdenDelDia(hoyStr, pedidosHistorial, sanitizadas);
     setMesas(sanitizadas);
     setUltimoNumeroOrden(nuevoMax);
+    localStorage.setItem(STORAGE_MESAS, JSON.stringify(sanitizadas));
     guardarMesasActivasEnSupabase(sanitizadas, nuevoMax);
     transmitirCambiosMesas(sanitizadas, nuevoMax);
 
     setIsPedidoModalOpen(false);
     setIsCobroModalOpen(false);
     setMesaSeleccionada(null);
-    mostrarNotificacion(`Mesa ${numeroMesa} liberada sin pedido`, 'info');
+    mostrarNotificacion(`Comanda de Mesa ${numeroMesa} cancelada. Números de orden resecuenciados`, 'info');
   };
 
   // Procesar cobro y guardar en Supabase y Firestore

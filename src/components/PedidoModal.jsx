@@ -133,6 +133,19 @@ export default function PedidoModal() {
               </button>
             </div>
 
+            {/* Botón Cancelar Orden (visible si hay productos) */}
+            {productos.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setConfirmandoEliminar(true)}
+                className="py-1.5 px-2.5 sm:px-3 rounded-xl border border-rose-500/30 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 hover:text-rose-300 font-bold text-xs flex items-center gap-1.5 transition-colors"
+                title="Cancelar comanda y liberar mesa"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Cancelar Orden</span>
+              </button>
+            )}
+
             {/* Botón Cerrar Modal */}
             <button
               onClick={cerrarModalPedido}
@@ -422,6 +435,18 @@ export default function PedidoModal() {
                 </button>
               </div>
 
+              {/* Botón secundario para Cancelar y Vaciar Comanda */}
+              {productos.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setConfirmandoEliminar(true)}
+                  className="w-full py-2 px-3 rounded-xl border border-rose-500/20 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 hover:text-rose-300 font-bold text-xs flex items-center justify-center gap-1.5 transition-colors"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  <span>Cancelar y Vaciar Comanda</span>
+                </button>
+              )}
+
             </div>
 
           </div>
@@ -438,9 +463,9 @@ export default function PedidoModal() {
               <AlertTriangle className="w-6 h-6" />
             </div>
             <div>
-              <h4 className="font-bold text-white text-base">¿Cancelar pedido de Mesa {mesaSeleccionada}?</h4>
+              <h4 className="font-bold text-white text-base">¿Cancelar orden de Mesa {mesaSeleccionada}?</h4>
               <p className="text-xs text-slate-400 mt-1">
-                Se vaciarán todos los productos agregados y la mesa volverá al estado Libre.
+                Se cancelará el pedido activo, se vaciarán los platos y la mesa volverá a estar Libre. Las órdenes siguientes se reordenarán automáticamente sin huecos.
               </p>
             </div>
             <div className="grid grid-cols-2 gap-2 pt-2">
@@ -459,7 +484,7 @@ export default function PedidoModal() {
                 }}
                 className="py-2 px-3 rounded-xl bg-rose-600 text-white text-xs font-bold hover:bg-rose-500"
               >
-                Sí, cancelar
+                Sí, cancelar orden
               </button>
             </div>
           </div>

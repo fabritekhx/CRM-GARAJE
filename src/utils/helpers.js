@@ -829,9 +829,13 @@ export const fusionarMesasInteligente = (locales = [], remotas = [], pedidosPaga
       return;
     }
 
-    // Regla 2: Si la remota tiene pedido activo y la local está vacía (ej. abriendo en móvil por primera vez)
+    // Regla 2: Si la remota tiene pedido activo y la local está vacía (ej. comanda cancelada/vaciada localmente o abriendo en móvil)
     if (!localTienePedido && remotaTienePedido) {
-      mapa.set(key, { ...remotaMesa });
+      if (localTimestamp > remotaTimestamp) {
+        mapa.set(key, { ...localMesa });
+      } else {
+        mapa.set(key, { ...remotaMesa });
+      }
       return;
     }
 

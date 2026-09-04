@@ -125,10 +125,11 @@ export const guardarMesasActivasEnSupabase = async (mesas, ultimoNumeroOrden = 0
         return true;
       })
       .map((m) => {
+        const timestamp = Number(m.updatedAt) || Date.now();
         if (!m.pedidoActual || !Array.isArray(m.pedidoActual.productos) || m.pedidoActual.productos.length === 0) {
-          return { ...m, estado: 'libre', pedidoActual: null };
+          return { ...m, estado: 'libre', pedidoActual: null, updatedAt: timestamp };
         }
-        return m;
+        return { ...m, updatedAt: timestamp };
       });
 
     const payload = {
@@ -210,11 +211,16 @@ export const cargarMesasActivasDesdeSupabase = async () => {
       .maybeSingle();
 
     if (!errorFallback && dataFallback && Array.isArray(dataFallback.productos) && dataFallback.productos.length > 0) {
+      const globalTime = dataFallback.fecha ? new Date(dataFallback.fecha).getTime() : Date.now();
+      const mesasConTimestamp = dataFallback.productos.map((m) => ({
+        ...m,
+        updatedAt: Number(m.updatedAt) || globalTime,
+      }));
       return {
         success: true,
-        mesas: dataFallback.productos,
+        mesas: mesasConTimestamp,
         ultimoNumeroOrden: Number(dataFallback.numero_orden) || 0,
-        updatedAt: dataFallback.fecha ? new Date(dataFallback.fecha).getTime() : Date.now(),
+        updatedAt: globalTime,
       };
     }
 

@@ -37,7 +37,7 @@ function MesaCard({ mesa }) {
 
   const handleConfirmarBorrado = (e) => {
     e.stopPropagation();
-    eliminarMesa(mesa.id || mesa.numero);
+    eliminarMesa(mesa.numero !== undefined ? mesa.numero : mesa.id);
     setMostrarConfirmacionBorrar(false);
   };
 
@@ -237,10 +237,16 @@ function MesaCard({ mesa }) {
           </div>
           <div>
             <h4 className="font-bold text-sm text-white">
-              ¿Eliminar {esDomicilio ? 'este Domicilio' : `Mesa ${mesa.numero}`}?
+              {estaOcupada 
+                ? `¿Cancelar orden de ${esDomicilio ? 'este Domicilio' : `Mesa ${mesa.numero}`}?`
+                : `¿Eliminar ${esDomicilio ? 'este Domicilio' : `Mesa ${mesa.numero}`}?`
+              }
             </h4>
             <p className="text-[11px] text-slate-400 mt-0.5">
-              {estaOcupada ? 'Tiene productos sin cobrar que se cancelarán.' : 'Se quitará del tablero principal.'}
+              {estaOcupada 
+                ? 'Se vaciará la comanda y la mesa volverá a estar Libre. Las órdenes siguientes se reordenarán automáticamente sin huecos.'
+                : 'Se quitará del tablero principal.'
+              }
             </p>
           </div>
           <div className="flex items-center gap-2 w-full pt-1">
@@ -256,7 +262,7 @@ function MesaCard({ mesa }) {
               onClick={handleConfirmarBorrado}
               className="flex-1 py-1.5 px-2 rounded-lg bg-red-500 hover:bg-red-400 text-white text-xs font-bold transition-colors shadow-md shadow-red-500/20"
             >
-              Sí, Eliminar
+              {estaOcupada ? 'Sí, Cancelar Orden' : 'Sí, Eliminar'}
             </button>
           </div>
         </div>
