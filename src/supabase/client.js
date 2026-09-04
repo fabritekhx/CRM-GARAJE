@@ -113,9 +113,27 @@ export const guardarMesasActivasEnSupabase = async (mesas, ultimoNumeroOrden = 0
   if (!supabase) return { success: false, error: 'Supabase no inicializado' };
 
   try {
+    // Sanitizar mesas antes de enviar a la nube:
+    // 1. Descartar domicilios huérfanos o sin productos activos.
+    // 2. Garantizar que mesas físicas sin productos figuren como libres sin comanda vacía.
+    const mesasSanitizadas = (mesas || [])
+      .filter((m) => {
+        if (!m) return false;
+        if (m.tipo === 'domicilio') {
+          return m.pedidoActual && Array.isArray(m.pedidoActual.productos) && m.pedidoActual.productos.length > 0;
+        }
+        return true;
+      })
+      .map((m) => {
+        if (!m.pedidoActual || !Array.isArray(m.pedidoActual.productos) || m.pedidoActual.productos.length === 0) {
+          return { ...m, estado: 'libre', pedidoActual: null };
+        }
+        return m;
+      });
+
     const payload = {
       id: 'estado_actual',
-      mesas: mesas || [],
+      mesas: mesasSanitizadas,
       ultimo_numero_orden: Number(ultimoNumeroOrden) || 0,
       updated_at: new Date().toISOString(),
     };
@@ -146,7 +164,7 @@ export const guardarMesasActivasEnSupabase = async (mesas, ultimoNumeroOrden = 0
       notas: 'ESTADO_GLOBAL_MESAS_EN_CURSO',
       estado: 'activo',
       desglose_pagos: [],
-      productos: mesas || [],
+      productos: mesasSanitizadas,
     };
 
     const { error: fallbackError } = await supabase

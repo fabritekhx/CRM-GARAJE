@@ -672,12 +672,70 @@ export const compartirTicket = async (pedido) => {
 };
 
 /**
+ * Sanitiza la lista de mesas para asegurar integridad absoluta:
+ * 1. Limpia mesas con pedidos ya cobrados en el historial (evita pedidos zombies).
+ * 2. Purga pedidos activos de jornadas anteriores que hayan quedado huérfanos.
+ * 3. Garantiza que mesas sin productos reales figuren como libres sin comanda.
+ * 4. Elimina cuadros de domicilio temporales que ya no tienen pedido activo.
+ */
+export const sanitizarMesasActivas = (mesas = [], pedidosPagados = []) => {
+  if (!Array.isArray(mesas)) return [];
+
+  const hoyStr = obtenerFechaLocal();
+  const idsPedidosPagados = new Set(
+    (pedidosPagados || [])
+      .filter((p) => p && (p.estado === 'pagado' || p.estado === 'cobrado'))
+      .map((p) => String(p.id))
+  );
+
+  return mesas
+    .filter((m) => {
+      if (!m) return false;
+      const esDomicilio = m.tipo === 'domicilio';
+      if (esDomicilio) {
+        // Un domicilio sin pedido o con 0 productos no debe existir como mesa ocupada
+        if (!m.pedidoActual || !Array.isArray(m.pedidoActual.productos) || m.pedidoActual.productos.length === 0) {
+          return false;
+        }
+        // Si el pedido del domicilio ya fue pagado en el historial, descartar el cuadro
+        if (idsPedidosPagados.has(String(m.pedidoActual.id))) {
+          return false;
+        }
+        // Si el pedido del domicilio es de una jornada anterior, descartar
+        const fechaPedido = m.pedidoActual.fecha ? obtenerFechaLocal(m.pedidoActual.fecha) : '';
+        if (fechaPedido && fechaPedido !== hoyStr) {
+          return false;
+        }
+      }
+      return true;
+    })
+    .map((m) => {
+      if (!m.pedidoActual || !Array.isArray(m.pedidoActual.productos) || m.pedidoActual.productos.length === 0) {
+        return { ...m, estado: 'libre', pedidoActual: null };
+      }
+
+      // Si el pedido de la mesa ya fue cobrado en el historial, la mesa debe estar libre
+      if (idsPedidosPagados.has(String(m.pedidoActual.id))) {
+        return { ...m, estado: 'libre', pedidoActual: null };
+      }
+
+      // Si el pedido activo de la mesa pertenece a una fecha anterior (sesión pasada no cerrada)
+      const fechaPedido = m.pedidoActual.fecha ? obtenerFechaLocal(m.pedidoActual.fecha) : '';
+      if (fechaPedido && fechaPedido !== hoyStr) {
+        return { ...m, estado: 'libre', pedidoActual: null };
+      }
+
+      return m;
+    });
+};
+
+/**
  * Fusiona inteligentemente dos conjuntos de mesas (locales y remotas)
  * para evitar sobrescrituras destructivas y resolver concurrencia multi-dispositivo.
  */
-export const fusionarMesasInteligente = (locales = [], remotas = []) => {
-  if (!Array.isArray(remotas) || remotas.length === 0) return locales || [];
-  if (!Array.isArray(locales) || locales.length === 0) return remotas || [];
+export const fusionarMesasInteligente = (locales = [], remotas = [], pedidosPagados = []) => {
+  if (!Array.isArray(remotas) || remotas.length === 0) return sanitizarMesasActivas(locales || [], pedidosPagados);
+  if (!Array.isArray(locales) || locales.length === 0) return sanitizarMesasActivas(remotas || [], pedidosPagados);
 
   const mapa = new Map();
 
@@ -745,7 +803,8 @@ export const fusionarMesasInteligente = (locales = [], remotas = []) => {
     mapa.set(key, localTimestamp > remotaTimestamp ? { ...localMesa } : { ...remotaMesa });
   });
 
-  return Array.from(mapa.values());
+  const resultadoBruto = Array.from(mapa.values());
+  return sanitizarMesasActivas(resultadoBruto, pedidosPagados);
 };
 
 /**

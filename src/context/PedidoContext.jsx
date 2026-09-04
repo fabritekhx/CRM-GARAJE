@@ -191,6 +191,12 @@ export const PedidoProvider = ({ children }) => {
   // Fecha actual observada por la app en la zona horaria local del negocio
   const [fechaActualApp, setFechaActualApp] = useState(() => obtenerFechaLocal());
 
+  // Referencia siempre actualizada del historial para sanitizar mesas contra pedidos ya pagados
+  const pedidosHistorialRef = useRef(pedidosHistorial);
+  useEffect(() => {
+    pedidosHistorialRef.current = pedidosHistorial;
+  }, [pedidosHistorial]);
+
   // Guardar en localStorage automáticamente ante cambios locales
   useEffect(() => {
     localStorage.setItem(STORAGE_MESAS, JSON.stringify(mesas));
@@ -288,13 +294,21 @@ export const PedidoProvider = ({ children }) => {
       const test = await probarConexionSupabase();
       setIsSupabaseConnected(test.conectado);
 
-      // 2. Cargar mesas activas / pedidos en curso antes de cobrar
+      // 2. Cargar primero pedidos cobrados desde Supabase para tener historial exacto
+      const resPedidos = await cargarPedidosDesdeSupabase();
+      let pedidosActuales = pedidosHistorial;
+      if (resPedidos.success && Array.isArray(resPedidos.data)) {
+        pedidosActuales = resPedidos.data;
+        setPedidosHistorial(resPedidos.data);
+      }
+
+      // 3. Cargar mesas activas / pedidos en curso, sanitizándolas contra los pedidos ya pagados
       const resMesas = await cargarMesasActivasDesdeSupabase();
       let mesasActuales = mesas;
       if (resMesas.success && Array.isArray(resMesas.mesas) && resMesas.mesas.length > 0) {
-        mesasActuales = fusionarMesasInteligente(mesas, resMesas.mesas);
+        mesasActuales = fusionarMesasInteligente(mesas, resMesas.mesas, pedidosActuales);
         setMesas((current) => {
-          const fusionado = fusionarMesasInteligente(current, resMesas.mesas);
+          const fusionado = fusionarMesasInteligente(current, resMesas.mesas, pedidosActuales);
           isRemoteSyncRef.current = true;
           return fusionado;
         });
@@ -302,14 +316,6 @@ export const PedidoProvider = ({ children }) => {
 
       // Marcar carga inicial como completada para habilitar sincronización saliente
       hasInitialSyncCompletedRef.current = true;
-
-      // 3. Cargar pedidos cobrados desde Supabase
-      const resPedidos = await cargarPedidosDesdeSupabase();
-      let pedidosActuales = pedidosHistorial;
-      if (resPedidos.success) {
-        pedidosActuales = resPedidos.data || [];
-        setPedidosHistorial(resPedidos.data || []);
-      }
 
       // 4. Recalcular consecutivo de orden de HOY para empezar en 1 y no saltar números
       const hoyStr = obtenerFechaLocal();
@@ -390,7 +396,7 @@ export const PedidoProvider = ({ children }) => {
 
           if (payload && Array.isArray(payload.mesas)) {
             setMesas((current) => {
-              const fusionado = fusionarMesasInteligente(current, payload.mesas);
+              const fusionado = fusionarMesasInteligente(current, payload.mesas, pedidosHistorialRef.current);
               if (JSON.stringify(current) !== JSON.stringify(fusionado)) {
                 isRemoteSyncRef.current = true;
                 return fusionado;
@@ -436,7 +442,7 @@ export const PedidoProvider = ({ children }) => {
             return;
           }
           setMesas((current) => {
-            const fusionado = fusionarMesasInteligente(current, event.data.mesas);
+            const fusionado = fusionarMesasInteligente(current, event.data.mesas, pedidosHistorialRef.current);
             if (JSON.stringify(current) !== JSON.stringify(fusionado)) {
               isRemoteSyncRef.current = true;
               return fusionado;
@@ -479,7 +485,7 @@ export const PedidoProvider = ({ children }) => {
       cargarMesasActivasDesdeSupabase().then((res) => {
         if (res.success && Array.isArray(res.mesas) && res.mesas.length > 0) {
           setMesas((current) => {
-            const fusionado = fusionarMesasInteligente(current, res.mesas);
+            const fusionado = fusionarMesasInteligente(current, res.mesas, pedidosHistorialRef.current);
             if (JSON.stringify(current) !== JSON.stringify(fusionado)) {
               isRemoteSyncRef.current = true;
               return fusionado;
@@ -510,7 +516,7 @@ export const PedidoProvider = ({ children }) => {
         const res = await cargarMesasActivasDesdeSupabase();
         if (res.success && Array.isArray(res.mesas) && res.mesas.length > 0) {
           setMesas((current) => {
-            const fusionado = fusionarMesasInteligente(current, res.mesas);
+            const fusionado = fusionarMesasInteligente(current, res.mesas, pedidosHistorialRef.current);
             if (JSON.stringify(current) !== JSON.stringify(fusionado)) {
               isRemoteSyncRef.current = true;
               return fusionado;
@@ -995,26 +1001,42 @@ export const PedidoProvider = ({ children }) => {
   const cerrarModalPedido = () => {
     lastLocalMutationTimestampRef.current = Date.now();
     if (mesaSeleccionada) {
+      let mesasActualizadas;
+      let nuevoMax;
       setMesas((prev) => {
         let huboLiberacion = false;
-        const actualizadas = prev.map((m) => {
-          if (m.numero === mesaSeleccionada) {
-            if (!m.pedidoActual?.productos || m.pedidoActual.productos.length === 0) {
-              huboLiberacion = true;
-              return { ...m, estado: 'libre', pedidoActual: null, updatedAt: Date.now() };
+        const actualizadas = prev
+          .filter((m) => {
+            // Si es un domicilio temporal sin productos, descartarlo al cerrar
+            if ((m.numero === mesaSeleccionada || m.id === mesaSeleccionada) && m.tipo === 'domicilio') {
+              return m.pedidoActual?.productos && m.pedidoActual.productos.length > 0;
             }
-          }
-          return m;
-        });
+            return true;
+          })
+          .map((m) => {
+            if (m.numero === mesaSeleccionada || m.id === mesaSeleccionada) {
+              if (!m.pedidoActual?.productos || m.pedidoActual.productos.length === 0) {
+                huboLiberacion = true;
+                return { ...m, estado: 'libre', pedidoActual: null, updatedAt: Date.now() };
+              }
+            }
+            return m;
+          });
 
         if (huboLiberacion) {
           const hoyStr = obtenerFechaLocal();
-          const nuevoMax = calcularUltimoNumeroOrdenDelDia(hoyStr, pedidosHistorial, actualizadas);
+          nuevoMax = calcularUltimoNumeroOrdenDelDia(hoyStr, pedidosHistorial, actualizadas);
           setUltimoNumeroOrden(nuevoMax);
+          mesasActualizadas = actualizadas;
         }
 
         return actualizadas;
       });
+
+      if (mesasActualizadas) {
+        guardarMesasActivasEnSupabase(mesasActualizadas, nuevoMax);
+        transmitirCambiosMesas(mesasActualizadas, nuevoMax);
+      }
     }
     setIsPedidoModalOpen(false);
     setMesaSeleccionada(null);
@@ -1133,17 +1155,28 @@ export const PedidoProvider = ({ children }) => {
   // Cancelar/Vaciar pedido de una mesa (recalculando el consecutivo para no saltar números)
   const cancelarPedidoMesa = (numeroMesa) => {
     lastLocalMutationTimestampRef.current = Date.now();
+    let mesasActualizadas;
+    let nuevoMax;
     setMesas((prev) => {
-      const actualizadas = prev.map((m) =>
-        m.numero === numeroMesa
-          ? { ...m, estado: 'libre', pedidoActual: null, updatedAt: Date.now() }
-          : m
-      );
+      const actualizadas = prev
+        .filter((m) => !((m.numero === numeroMesa || m.id === numeroMesa) && m.tipo === 'domicilio'))
+        .map((m) =>
+          (m.numero === numeroMesa || m.id === numeroMesa)
+            ? { ...m, estado: 'libre', pedidoActual: null, updatedAt: Date.now() }
+            : m
+        );
       const hoyStr = obtenerFechaLocal();
-      const nuevoMax = calcularUltimoNumeroOrdenDelDia(hoyStr, pedidosHistorial, actualizadas);
+      nuevoMax = calcularUltimoNumeroOrdenDelDia(hoyStr, pedidosHistorial, actualizadas);
       setUltimoNumeroOrden(nuevoMax);
+      mesasActualizadas = actualizadas;
       return actualizadas;
     });
+
+    if (mesasActualizadas) {
+      guardarMesasActivasEnSupabase(mesasActualizadas, nuevoMax);
+      transmitirCambiosMesas(mesasActualizadas, nuevoMax);
+    }
+
     setIsPedidoModalOpen(false);
     setIsCobroModalOpen(false);
     setMesaSeleccionada(null);
@@ -1214,8 +1247,9 @@ export const PedidoProvider = ({ children }) => {
     setPedidosHistorial((prev) => [pedidoPagado, ...prev]);
 
     // 4. Liberar la mesa o eliminar el cuadro si es a domicilio
-    setMesas((prev) =>
-      prev
+    let mesasActualizadas;
+    setMesas((prev) => {
+      mesasActualizadas = prev
         .filter((m) => {
           const esEstaMesa = m.numero === mesaSeleccionada || m.id === mesaSeleccionada;
           if (esEstaMesa && m.tipo === 'domicilio') {
@@ -1227,8 +1261,15 @@ export const PedidoProvider = ({ children }) => {
           m.numero === mesaSeleccionada || m.id === mesaSeleccionada
             ? { ...m, estado: 'libre', pedidoActual: null, updatedAt: Date.now() }
             : m
-        )
-    );
+        );
+      return mesasActualizadas;
+    });
+
+    // Inmediatamente sincronizar en la nube la mesa libre para evitar reanimaciones zombies
+    if (mesasActualizadas) {
+      guardarMesasActivasEnSupabase(mesasActualizadas, ultimoNumeroOrden);
+      transmitirCambiosMesas(mesasActualizadas, ultimoNumeroOrden);
+    }
 
     // 5. Lanzar confeti de éxito
     try {
