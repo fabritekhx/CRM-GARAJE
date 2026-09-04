@@ -16,7 +16,8 @@ import {
   Sparkles, 
   ShoppingBag, 
   Bike,
-  Cloud 
+  Cloud,
+  RotateCcw 
 } from 'lucide-react';
 import { usePedidos } from '../context/PedidoContext';
 import { formatearDinero, formatearHora } from '../utils/helpers';
