@@ -822,13 +822,15 @@ export const calcularUltimoNumeroOrdenDelDia = (fechaStr, listaPedidos = [], lis
       const f = obtenerFechaLocal(p.fecha);
       return f === hoyStr;
     })
-    .map((p) => Number(p.numeroOrden))
+    .map((p) => Number(p.numeroOrden !== undefined ? p.numeroOrden : p.numero_orden))
     .filter((n) => !isNaN(n) && n > 0);
 
-  // 2. Números de pedidos actualmente activos en mesas hoy (que tengan comanda)
+  // 2. Números de pedidos actualmente activos en mesas hoy (que tengan productos cargados)
   const ordenesMesasActivasHoy = (listaMesas || [])
     .filter((m) => {
       if (!m || !m.pedidoActual || !m.pedidoActual.numeroOrden) return false;
+      // Una mesa sin productos no consume consecutivo para evitar saltos si solo se abrió por error
+      if (!Array.isArray(m.pedidoActual.productos) || m.pedidoActual.productos.length === 0) return false;
       const f = m.pedidoActual.fecha ? obtenerFechaLocal(m.pedidoActual.fecha) : '';
       return f === hoyStr || !f;
     })

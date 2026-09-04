@@ -660,7 +660,7 @@ export const PedidoProvider = ({ children }) => {
 
         const pedido = m.pedidoActual || {
           id: `ped_${Date.now()}_m${m.numero}`,
-          numeroOrden: ultimoNumeroOrden + 1,
+          numeroOrden: calcularUltimoNumeroOrdenDelDia(obtenerFechaLocal(), pedidosHistorial, prev) + 1,
           mesa: m.numero,
           fecha: new Date().toISOString(),
           productos: [],
@@ -1267,8 +1267,11 @@ export const PedidoProvider = ({ children }) => {
 
     // Inmediatamente sincronizar en la nube la mesa libre para evitar reanimaciones zombies
     if (mesasActualizadas) {
-      guardarMesasActivasEnSupabase(mesasActualizadas, ultimoNumeroOrden);
-      transmitirCambiosMesas(mesasActualizadas, ultimoNumeroOrden);
+      const hoyStr = obtenerFechaLocal();
+      const nuevoMaxOrden = calcularUltimoNumeroOrdenDelDia(hoyStr, [pedidoPagado, ...pedidosHistorial], mesasActualizadas);
+      setUltimoNumeroOrden(nuevoMaxOrden);
+      guardarMesasActivasEnSupabase(mesasActualizadas, nuevoMaxOrden);
+      transmitirCambiosMesas(mesasActualizadas, nuevoMaxOrden);
     }
 
     // 5. Lanzar confeti de éxito
